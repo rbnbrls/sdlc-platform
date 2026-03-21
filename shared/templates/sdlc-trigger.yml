@@ -1,0 +1,33 @@
+name: SDLC Trigger
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'projects/*/backlog/**/*.md'
+
+jobs:
+  trigger-n8n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect changed backlog files
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD | grep 'backlog.*\.md$' | head -20)
+          echo "files=$CHANGED" >> $GITHUB_OUTPUT
+
+      - name: Trigger n8n SDLC Router
+        if: steps.changed.outputs.files != ''
+        run: |
+          curl -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-Webhook-Secret: ${{ secrets.N8N_WEBHOOK_SECRET }}" \
+            -d '{
+              "event": "backlog_changed",
+              "files": "${{ steps.changed.outputs.files }}",
+              "commit": "${{ github.sha }}",
+              "project": "${{ github.event.repository.name }}"
+            }'
