@@ -1,0 +1,315 @@
+{
+  "name": "SDLC Router",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sdlc-router",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "switch",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [550, 300],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.type }}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value2": "epic",
+              "output": 0
+            },
+            {
+              "operation": "equal",
+              "value2": "story",
+              "output": 1
+            },
+            {
+              "operation": "equal",
+              "value2": "task",
+              "output": 2
+            },
+            {
+              "operation": "equal",
+              "value2": "bug",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": 4
+      }
+    },
+    {
+      "id": "planner",
+      "name": "Planner Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 150],
+      "parameters": {
+        "url": "http://agent-planner:8080/webhook",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "={{ $json.type }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.project }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "developer",
+      "name": "Developer Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 300],
+      "parameters": {
+        "url": "http://agent-developer:8080/webhook",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "={{ $json.type }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.project }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "tester",
+      "name": "Tester Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 450],
+      "parameters": {
+        "url": "http://agent-tester:8080/webhook",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "={{ $json.type }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.project }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "devops",
+      "name": "DevOps Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [850, 600],
+      "parameters": {
+        "url": "http://agent-devops:8080/webhook",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "type",
+              "value": "={{ $json.type }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.title }}"
+            },
+            {
+              "name": "file",
+              "value": "={{ $json.file }}"
+            },
+            {
+              "name": "project",
+              "value": "={{ $json.project }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "unknown",
+      "name": "Unknown Type",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [850, 750],
+      "parameters": {}
+    },
+    {
+      "id": "respond",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1100, 300],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"processed\", \"type\": $json.type } }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route by Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [
+          {
+            "node": "Planner Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Developer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Developer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Tester Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Planner Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Developer Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tester Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DevOps Agent": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unknown Type": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": ["sdlc"],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-21T20:27:00Z",
+  "createdAt": "2026-03-21T20:27:00Z"
+}
