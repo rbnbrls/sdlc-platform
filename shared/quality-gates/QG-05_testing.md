@@ -20,9 +20,22 @@
 - Fout scenario's getest
 - Edge cases getest
 
+### Dependency Vulnerability Scan (QG-05b)
+- `vulnerability_scan.critical` = 0
+- `vulnerability_scan.high` = 0
+- Scan uitgevoerd en geparsed zonder errors
+
+### Staging Health Check
+- `staging_health` = "ok"
+- Staging URL reageert met HTTP 200
+
 ### Frontmatter
 - `test_result` is ingevuld (`pass`)
-- `status` bijgewerkt naar `deploy-ready`
+- `vulnerability_scan` ingevuld (`ok` of `moderate`)
+- `status` bijgewerkt naar `staging-verified`
+
+### Gitea Commit Status
+- Commit status `SDLC: QG-05 Tests` is `success`
 
 ## Bij falen
 - `status` terugzetten naar `in-progress`

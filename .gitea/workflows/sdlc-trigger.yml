@@ -33,14 +33,20 @@ jobs:
             | tr '\n' '|')
           echo "files=${FILES%|}" >> $GITHUB_OUTPUT
 
-      - name: Stuur naar n8n
+      - name: Genereer HMAC-SHA256 handtekening
+        id: sign
+        if: steps.check_author.outputs.skip == 'false' && steps.changed.outputs.files != ''
+        run: |
+          PAYLOAD="{\"files\":\"${{ steps.changed.outputs.files }}\",\"commit_sha\":\"${{ github.sha }}\",\"pusher\":\"${{ github.actor }}\",\"timestamp\":\"$(date -u +%s)\"}"
+          SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "${{ secrets.N8N_SECRET }}" | awk '{print $2}')
+          echo "payload=$PAYLOAD" >> $GITHUB_OUTPUT
+          echo "signature=sha256=$SIG" >> $GITHUB_OUTPUT
+
+      - name: Stuur naar n8n (HMAC gesigned)
         if: steps.check_author.outputs.skip == 'false' && steps.changed.outputs.files != ''
         run: |
           curl -sf -X POST "${{ secrets.N8N_SDLC_WEBHOOK }}" \
             -H "Content-Type: application/json" \
-            -H "X-Secret: ${{ secrets.N8N_SECRET }}" \
-            -d "{
-              \"files\": \"${{ steps.changed.outputs.files }}\",
-              \"commit_sha\": \"${{ github.sha }}\",
-              \"pusher\": \"${{ github.actor }}\"
-            }"
+            -H "X-Hub-Signature-256: ${{ steps.sign.outputs.signature }}" \
+            -H "X-Gitea-Event: push" \
+            -d '${{ steps.sign.outputs.payload }}'

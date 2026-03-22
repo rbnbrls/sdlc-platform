@@ -1,6 +1,6 @@
 # QG-04: Review Gate
 
-**Fase:** Na Reviewer Agent, vóór Tester Agent
+**Fase:** Na Reviewer Agent (na Secret Scanner), vóór Tester Agent
 **Evalueert:** n8n + Claude API
 
 ## Verplichte criteria
@@ -14,10 +14,16 @@
 - Geen hardcoded secrets of credentials
 - Input validatie aanwezig waar relevant
 - Auth checks aanwezig waar relevant
-- Geen `TODO` of `FIXME` in productie code
+- Geen `TODO` of FIXME` in productie code
 
-### PR aanwezig (optioneel maar aanbevolen)
-- `pr_number` ingevuld als PR-flow gebruikt wordt
+### Gitea commit status
+- Commit status `SDLC: QG-03b Secret Scan` is `success`
+- Commit status `SDLC: QG-04 Review` is `success`
+
+### PR review aanwezig
+- `pr_number` ingevuld
+- Gitea PR heeft minimaal één `APPROVED` review
+- Geen openstaande `REQUEST_CHANGES` reviews
 
 ## Bij falen (approved: false)
 - `status` terugzetten naar `in-progress`

@@ -16,6 +16,7 @@ pr_number: ""
 commit: ""
 test_result: ""
 deployed_at: ""
+documented_at: ""
 triage_notes: ""
 ---
 

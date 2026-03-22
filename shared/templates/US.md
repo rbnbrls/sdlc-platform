@@ -7,12 +7,13 @@ status: new
 priority: medium
 feature: FE-XXX         # verplicht: parent feature
 estimate: M             # XS | S | M | L | XL
+depends_on: []          # [US-XXX, US-YYY] — stories die eerst klaar moeten zijn
 created: YYYY-MM-DD
 updated: YYYY-MM-DD
 branch: ""
 commit: ""
 pr_number: ""
-test_result: ""
+test_result: ""         # pass | fail
 retry_count: 0          # wordt bijgehouden door n8n
 ---
 

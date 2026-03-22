@@ -1,10 +1,16 @@
-# SDLC Platform v2 — Puur Markdown Werkvoorraad
+# SDLC Platform v3 — Puur Markdown Werkvoorraad met Volledige STP
 
 **Kernprincipe:** De volledige werkvoorraad leeft als `.md` bestanden in één centrale Git-repo.
-Geen Gitea Issues, geen Projects, geen Labels, geen Milestones nodig.
-Enige externe afhankelijkheden: Git, n8n, Kilo-Code API, Coolify.
+Elk werkitem doorloopt de volledige SDLC pipeline automatisch — van `new` naar `documented`
+zonder menselijke tussenkomst, tenzij een kwaliteitsgate dat vereist.
 
----
+**Straight Through Processing (STP):**
+```
+new → triaged → planned → in-progress → review → testing → staging-verified → done → documented
+```
+
+Enige externe afhankelijkheden: Gitea, n8n, Anthropic API, Coolify v4.
+
 
 ## Mapstructuur van `sdlc-platform` repo
 
@@ -27,34 +33,54 @@ sdlc-platform/
 │       │   │   └── FE-001_login-form.md
 │       │   └── stories/
 │       │       └── US-001_user-kan-inloggen.md
+│       ├── docs/
+│       │   ├── PROJECT.md              ← levende projectdocumentatie (mens + agent)
+│       │   ├── CHANGELOG.md            ← release notes per versie/datum
+│       │   └── AGENTS.md              ← optioneel: extra context voor AI agents
 │       └── decisions/
 │           └── ADR-001_jwt-vs-sessions.md   ← optioneel: architecture decisions
 │
 ├── shared/
 │   ├── agents/
 │   │   ├── triage.md
-│   │   ├── planner.md
+│   │   ├── planner.md                 ← maakt branch + draft PR aan
 │   │   ├── developer.md
-│   │   ├── reviewer.md
-│   │   ├── tester.md
-│   │   └── devops.md
+│   │   ├── reviewer.md                ← post PR review comments in Gitea
+│   │   ├── tester.md                  ← incl. dependency vulnerability scan
+│   │   ├── devops.md                  ← staging → productie, auto-rollback
+│   │   ├── documenter.md              ← bijwerkt docs + schrijft release notes
+│   │   ├── secret-scanner.md          ← NEW: scant git diff op secrets
+│   │   └── context-updater.md         ← NEW: verrijkt CLAUDE.md na elke cyclus
 │   ├── quality-gates/
 │   │   ├── QG-01_triage.md
 │   │   ├── QG-02_planning.md
 │   │   ├── QG-03_development.md
-│   │   ├── QG-04_review.md
-│   │   ├── QG-05_testing.md
-│   │   └── QG-06_deploy.md
-│   └── templates/
-│       ├── BUG.md
-│       ├── ISS.md
-│       ├── EP.md
-│       ├── FE.md
-│       └── US.md
+│   │   ├── QG-03b_secret-scan.md      ← NEW: secret scanning gate
+│   │   ├── QG-04_review.md            ← incl. Gitea commit statuses
+│   │   ├── QG-05_testing.md           ← incl. staging-verified status
+│   │   ├── QG-05b_vuln-scan.md        ← NEW: dependency vulnerability gate
+│   │   ├── QG-06_deploy.md            ← incl. auto-rollback
+│   │   ├── QG-06b_staging-verify.md   ← NEW: staging verificatie gate
+│   │   └── QG-07_documentation.md
+│   ├── templates/
+│   │   ├── BUG.md
+│   │   ├── ISS.md
+│   │   ├── EP.md
+│   │   ├── FE.md                      ← incl. staging/preview URL velden
+│   │   ├── US.md                      ← incl. depends_on veld
+│   │   ├── CLAUDE.md                  ← NEW: project template
+│   │   ├── PROJECT.md                 ← incl. bekende kwetsbaarheden sectie
+│   │   └── CHANGELOG.md
+│   └── scripts/
+│       └── sdlc-new.sh                ← NEW: CLI voor aanmaken werkitems
+│
+├── workflows/
+│   └── n8n-workflows.md               ← Volledige n8n workflow specificaties (19 workflows)
 │
 └── .gitea/
     └── workflows/
-        └── sdlc-trigger.yml             ← Gitea Action: detecteert wijzigingen → n8n
+        ├── sdlc-trigger.yml            ← HMAC-signed Gitea Action → n8n
+        └── project-webhook.yml         ← NEW: per project-repo event handler
 ```
 
 **Wat Gitea doet:** alleen Git-hosting en het uitvoeren van één Action die gewijzigde bestanden
@@ -72,20 +98,30 @@ n8n leest deze status en stuurt het item naar de juiste agent.
 
 | Type | Mogelijke statussen |
 |------|-------------------|
-| bug | `new` → `triaged` → `planned` → `in-progress` → `review` → `testing` → `done` |
-| issue | `new` → `triaged` → `planned` → `in-progress` → `review` → `done` |
-| epic | `new` → `triaged` → `active` → `done` |
-| feature | `new` → `planned` → `in-progress` → `review` → `testing` → `done` |
-| story | `new` → `in-progress` → `review` → `testing` → `done` |
+| bug | `new` → `triaged` → `planned` → `in-progress` → `review` → `testing` → `staging-verified` → `done` → `documented` |
+| issue | `new` → `triaged` → `planned` → `in-progress` → `review` → `staging-verified` → `done` → `documented` |
+| epic | `new` → `triaged` → `active` → `done` → `documented` |
+| feature | `new` → `planned` → `in-progress` → `review` → `testing` → `staging-verified` → `done` → `documented` |
+| story | `new` → `in-progress` → `review` → `testing` → `staging-verified` → `done` → `documented` |
+
+**Extra statussen voor foutafhandeling:**
+- `needs-human` — menselijke input vereist (pipeline gestopt)
+- `deploy-failed` — deployment gefaald, rollback uitgevoerd
 
 **Velden die door agents worden ingevuld** (beginnen leeg of als `""`)
 
 ```yaml
-branch: ""        # ingevuld door Planner Agent
-pr_number: ""     # ingevuld door Developer Agent
-commit: ""        # ingevuld door Developer Agent
-test_result: ""   # ingevuld door Tester Agent
-deployed_at: ""   # ingevuld door DevOps Agent
+branch: ""              # ingevuld door Planner Agent
+pr_number: ""           # ingevuld door Planner Agent (draft PR)
+pr_url: ""              # ingevuld door Planner Agent
+commit: ""              # ingevuld door Developer Agent
+test_result: ""         # pass | fail — ingevuld door Tester Agent
+vulnerability_scan: ""  # ok | moderate | blocked — ingevuld door Tester Agent
+staging_url: ""         # ingevuld door DevOps Agent
+staging_deployed_at: "" # ingevuld door DevOps Agent
+deployed_at: ""         # productie timestamp — ingevuld door DevOps Agent
+documented_at: ""       # ingevuld door Documenter Agent
+retry_count: 0          # bijgehouden door n8n (max 3)
 ```
 
 **Velden die door de mens worden ingevuld** (verplicht bij aanmaken)
@@ -698,8 +734,9 @@ Webhook (POST /sdlc-router)
       review        → Execute: SDLC Reviewer Agent
       testing       → Execute: SDLC Tester Agent
       deploy-ready  → Execute: SDLC DevOps Agent
+      done          → Execute: SDLC Documenter Agent
+      documented    → (geen actie: pipeline compleet)
       needs-human   → Telegram: notificatie menselijke input nodig
-      done          → (geen actie)
 ```
 
 ### Workflow 2: `SDLC Triage Agent`
@@ -817,6 +854,38 @@ Execute Workflow Trigger
 
 ---
 
+### Workflow 9: `SDLC Documenter Agent`
+
+```
+Execute Workflow Trigger
+  → [HTTP] Haal CLAUDE.md op
+  → [HTTP] Haal shared/agents/documenter.md op
+  → [HTTP] Haal projects/{project}/docs/PROJECT.md op (Gitea API, 404 = nieuw)
+  → [HTTP] Haal projects/{project}/docs/CHANGELOG.md op (Gitea API, 404 = nieuw)
+  → [HTTP] Haal lijst van bestanden in projects/{project}/backlog/ op
+  → [HTTP] Claude API: analyseer voltooid item + genereer doc-updates
+  → [Code] Parse JSON response
+  → [IF] PROJECT.md bestaat al?
+      ja  → [Code] Merge updates in bestaand PROJECT.md
+      nee → [Code] Genereer PROJECT.md vanuit shared/templates/PROJECT.md
+  → [IF] CHANGELOG.md bestaat al?
+      ja  → [Code] Voeg entry in boven de eerste bestaande entry
+      nee → [Code] Genereer CHANGELOG.md vanuit shared/templates/CHANGELOG.md
+  → [HTTP] Schrijf PROJECT.md naar sdlc-platform repo (Gitea API PUT/POST)
+  → [HTTP] Schrijf CHANGELOG.md naar sdlc-platform repo (Gitea API PUT/POST)
+  → [HTTP] Execute: SDLC Quality Gate Checker (QG-07)
+  → [IF] gate passed?
+      ja  → [HTTP] Update frontmatter item: status=documented
+            → Telegram: "📝 Docs bijgewerkt: {id} — {summary}"
+      nee → [Code] retry_count + 1
+           → [IF] retry_count >= 2?
+               ja  → [HTTP] Update frontmatter: status=needs-human
+                    → Telegram: "⚠️ Documentatie incompleet: {id}"
+               nee → Retry Documenter Agent met gefaalde criteria
+```
+
+---
+
 ## Hoe frontmatter updaten werkt in n8n (herbruikbaar patroon)
 
 Elke agent die frontmatter moet updaten gebruikt dit patroon:
@@ -889,14 +958,34 @@ Stel deze in via n8n → Settings → Variables:
 |-----------|--------|
 | `GITEA_URL` | `http://{unraid-ip}:3000` |
 | `GITEA_TOKEN` | Gitea API token (read+write) |
+| `GITEA_ORG` | `sdlc-platform` |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
+| `CLAUDE_MODEL_TRIAGE` | `claude-haiku-3-20241022` (goedkoop, snel) |
+| `CLAUDE_MODEL_DEV` | `claude-sonnet-4-5` (balans kwaliteit/kosten) |
+| `CLAUDE_MODEL_REVIEW` | `claude-opus-4-5` (krachtigst voor security review) |
+| `CLAUDE_MODEL_SCAN` | `claude-haiku-3-20241022` (snel voor patroonherkenning) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID |
 | `COOLIFY_URL` | `http://{unraid-ip}:8000` |
 | `COOLIFY_TOKEN` | Coolify API token |
-| `N8N_SECRET` | Webhook geheime string |
+| `N8N_SECRET` | HMAC secret (32 bytes hex: `openssl rand -hex 32`) |
+| `N8N_BASE_URL` | n8n externe URL (voor Coolify callbacks) |
 
 ---
+
+## CLAUDE.md template per project
+
+Zie `shared/templates/CLAUDE.md` voor het volledige template.
+Sla op als `projects/{naam}/CLAUDE.md` en vul alle velden in.
+
+**Verplichte velden voor volledige STP:**
+- `coolify_staging_uuid` — Coolify staging application UUID
+- `coolify_production_uuid` — Coolify productie application UUID
+- `staging_url` — URL voor health check na staging deployment
+- `production_url` — URL voor health check na productie deployment
+
+---
+
 
 ## CLAUDE.md template per project
 
@@ -990,10 +1079,10 @@ touch projects/demo-project/CLAUDE.md
    - `BUG.md`, `ISS.md`, `EP.md`, `FE.md`, `US.md`
 
 **1.6** Schrijf alle agent-prompts naar `shared/agents/`:
-   - `triage.md`, `planner.md`, `developer.md`, `reviewer.md`, `tester.md`, `devops.md`
+   - `triage.md`, `planner.md`, `developer.md`, `reviewer.md`, `tester.md`, `devops.md`, `documenter.md`
 
 **1.7** Schrijf alle quality gates naar `shared/quality-gates/`:
-   - `QG-01_triage.md` t/m `QG-06_deploy.md`
+   - `QG-01_triage.md` t/m `QG-07_documentation.md`
 
 **1.8** Schrijf `.gitea/workflows/sdlc-trigger.yml` (zie hierboven)
 

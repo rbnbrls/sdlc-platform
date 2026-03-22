@@ -9,6 +9,7 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 target_version: ""      # optioneel
 features: []            # wordt ingevuld door Triage/Planner: [FE-001, FE-002]
+documented_at: ""
 triage_notes: ""
 ---
 
