@@ -1,7 +1,7 @@
 # QG-07: Documentation Gate
 
 **Fase:** Na Documenter Agent, afrondend voor het backlog item
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 

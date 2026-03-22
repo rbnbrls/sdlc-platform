@@ -84,7 +84,7 @@ Execute Workflow Trigger
   → [HTTP] Haal directorylijst van projectrepo op (Gitea API /git/trees/main?recursive=1)
   → [HTTP] Haal hoogste bestaande story-ID op (scan stories/ map)
   → [HTTP] Haal actieve milestone op (Gitea API /milestones?state=open)
-  → [HTTP] Claude API: maak plan (model: claude-sonnet, max 4000 tokens)
+  → [HTTP] OpenRouter API: maak plan (model: OPENROUTER_MODEL_DEV, max 4000 tokens)
   → [Code] Parse JSON response
   → [HTTP] Maak branch aan in projectrepo (Gitea API POST /branches)
   → [HTTP] Maak draft PR aan (Gitea API POST /pulls)
@@ -131,7 +131,7 @@ Execute Workflow Trigger (input: feature met status=planned)
 Execute Workflow Trigger
   → [HTTP] Haal git diff op (Gitea API: /compare/main...{branch})
   → [HTTP] Haal shared/agents/secret-scanner.md op
-  → [HTTP] Claude API: scan diff op secrets (model: claude-haiku, snel en goedkoop)
+  → [HTTP] OpenRouter API: scan diff op secrets (model: OPENROUTER_MODEL_SCAN, snel en goedkoop)
   → [Code] Parse JSON response
   → [Execute] SDLC Quality Gate Checker (QG-03b)
   → [IF] scan_passed?
@@ -207,7 +207,7 @@ Schedule Trigger: ma-vr 08:00 en 15:00
   → [Code] Filter: status IN (in-progress, review, testing, staging-verified)
             EN updated < vandaag - 2 dagen
   → [IF] stale items gevonden?
-      ja  → [HTTP] Claude API: genereer samenvatting van stale items
+      ja  → [HTTP] OpenRouter API: genereer samenvatting van stale items
             → Telegram: "⚠️ {n} items staan > 48u vast:\n{lijst met id en status}"
       nee → (stilte — niet spammen)
 ```
@@ -363,7 +363,7 @@ Manual Trigger / Execute Workflow Trigger / Telegram command
 
   → [HTTP] Haal alle triaged items op voor het project
   → [Code] Sorteer op: priority (critical > high > medium > low), dan estimate (XS/S eerst)
-  → [HTTP] Claude API: genereer sprint voorstel
+  → [HTTP] OpenRouter API: genereer sprint voorstel
       Input: gesorteerde items + CLAUDE.md (team velocity uit vorige sprints)
       Output: aanbevolen sprint inhoud + totale estimate + risico's
   → [Code] Genereer sprint markdown
@@ -382,11 +382,11 @@ Manual Trigger / Execute Workflow Trigger / Telegram command
 | `GITEA_URL` | `http://{unraid-ip}:3000` |
 | `GITEA_TOKEN` | Gitea API token (read+write) |
 | `GITEA_ORG` | `sdlc-platform` |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `CLAUDE_MODEL_TRIAGE` | `claude-haiku-3-20241022` (goedkoop) |
-| `CLAUDE_MODEL_DEV` | `claude-sonnet-4-5` (balans) |
-| `CLAUDE_MODEL_REVIEW` | `claude-opus-4-5` (krachtigst) |
-| `CLAUDE_MODEL_SCAN` | `claude-haiku-3-20241022` (snel) |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `OPENROUTER_MODEL_TRIAGE` | Default OpenRouter model (goedkoop) |
+| `OPENROUTER_MODEL_DEV` | Default OpenRouter model (balans) |
+| `OPENROUTER_MODEL_REVIEW` | Default OpenRouter model (krachtigst) |
+| `OPENROUTER_MODEL_SCAN` | Default OpenRouter model (snel) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID |
 | `COOLIFY_URL` | `http://{unraid-ip}:8000` |

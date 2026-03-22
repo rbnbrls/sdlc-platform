@@ -1,7 +1,7 @@
 # QG-05: Testing Gate
 
 **Fase:** Na Tester Agent, vóór DevOps Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 

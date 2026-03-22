@@ -638,7 +638,7 @@ Je mergt de branch, triggert deployment via Coolify en verifieert het resultaat.
 # QG-03: Development Gate
 
 **Fase:** Na Developer Agent, vóór Reviewer Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 
@@ -745,7 +745,7 @@ Webhook (POST /sdlc-router)
 Execute Workflow Trigger
   → [HTTP] Haal CLAUDE.md op (Gitea API)
   → [HTTP] Haal shared/agents/triage.md op (Gitea API)
-  → [HTTP] Claude API: analyseer item
+  → [HTTP] OpenRouter API: analyseer item
   → [Code] Parse JSON response
   → [IF] needs_human_input = true?
       ja  → [HTTP] Update frontmatter: status=needs-human
@@ -763,7 +763,7 @@ Execute Workflow Trigger
   → [HTTP] Haal CLAUDE.md op
   → [HTTP] Haal shared/agents/planner.md op
   → [HTTP] Haal directorylijst van projectrepo op (Gitea API)
-  → [HTTP] Claude API: maak plan
+  → [HTTP] OpenRouter API: maak plan
   → [Code] Parse JSON response
   → [HTTP] Maak branch aan in projectrepo (Gitea API POST /branches)
   → [HTTP] Update frontmatter van feature/bug: branch, status=planned
@@ -801,7 +801,7 @@ Execute Workflow Trigger
 ```
 Execute Workflow Trigger (input: {project, gate_id, context})
   → [HTTP] Haal shared/quality-gates/{gate_id}.md op
-  → [HTTP] Claude API: evalueer context tegen gate criteria
+  → [HTTP] OpenRouter API: evalueer context tegen gate criteria
   → [Code] Parse {passed, failed_criteria}
   → Return {passed, failed_criteria}
 ```
@@ -812,7 +812,7 @@ Execute Workflow Trigger (input: {project, gate_id, context})
 Execute Workflow Trigger
   → [HTTP] Haal git diff op (Gitea API: compare branch vs main)
   → [HTTP] Haal shared/agents/reviewer.md op
-  → [HTTP] Claude API: review de diff
+  → [HTTP] OpenRouter API: review de diff
   → [HTTP] Execute: SDLC Quality Gate Checker (QG-04)
   → [IF] approved?
       ja  → [HTTP] Update frontmatter: status=testing
@@ -863,7 +863,7 @@ Execute Workflow Trigger
   → [HTTP] Haal projects/{project}/docs/PROJECT.md op (Gitea API, 404 = nieuw)
   → [HTTP] Haal projects/{project}/docs/CHANGELOG.md op (Gitea API, 404 = nieuw)
   → [HTTP] Haal lijst van bestanden in projects/{project}/backlog/ op
-  → [HTTP] Claude API: analyseer voltooid item + genereer doc-updates
+  → [HTTP] OpenRouter API: analyseer voltooid item + genereer doc-updates
   → [Code] Parse JSON response
   → [IF] PROJECT.md bestaat al?
       ja  → [Code] Merge updates in bestaand PROJECT.md
@@ -959,11 +959,11 @@ Stel deze in via n8n → Settings → Variables:
 | `GITEA_URL` | `http://{unraid-ip}:3000` |
 | `GITEA_TOKEN` | Gitea API token (read+write) |
 | `GITEA_ORG` | `sdlc-platform` |
-| `ANTHROPIC_API_KEY` | Anthropic API key |
-| `CLAUDE_MODEL_TRIAGE` | `claude-haiku-3-20241022` (goedkoop, snel) |
-| `CLAUDE_MODEL_DEV` | `claude-sonnet-4-5` (balans kwaliteit/kosten) |
-| `CLAUDE_MODEL_REVIEW` | `claude-opus-4-5` (krachtigst voor security review) |
-| `CLAUDE_MODEL_SCAN` | `claude-haiku-3-20241022` (snel voor patroonherkenning) |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `OPENROUTER_MODEL_TRIAGE` | Default OpenRouter model (goedkoop, snel) |
+| `OPENROUTER_MODEL_DEV` | Default OpenRouter model (balans kwaliteit/kosten) |
+| `OPENROUTER_MODEL_REVIEW` | Default OpenRouter model (krachtigst voor security review) |
+| `OPENROUTER_MODEL_SCAN` | Default OpenRouter model (snel voor patroonherkenning) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID |
 | `COOLIFY_URL` | `http://{unraid-ip}:8000` |
@@ -1230,7 +1230,7 @@ Geen aanpassingen nodig in n8n.
 | Gitea Action triggert niet | Runner niet actief | Gitea → Admin → Runners: check status |
 | n8n ontvangt webhook niet | Firewall of verkeerde URL | Test met `curl -X POST {webhook-url}` vanuit Unraid |
 | Frontmatter update mislukt | Verkeerde SHA | Voeg altijd een GET /contents stap toe vóór de PUT |
-| Claude API geeft 401 | API key verkeerd | Check n8n Variables: ANTHROPIC_API_KEY |
+| OpenRouter API geeft 401 | API key verkeerd | Check n8n Variables: OPENROUTER_API_KEY |
 | Branch aanmaken mislukt | Repo bestaat niet | Zorg dat de code-repo bestaat in Gitea vóór de Planner |
 | Loop door dubbele trigger | Agent commit triggert zichzelf | Gitea Action filtert op auteur: sla agent-commits over |
 

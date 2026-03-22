@@ -1,7 +1,7 @@
 # QG-01: Triage Gate
 
 **Fase:** Na aanmaken werkitem, vóór Triage Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 

@@ -1,7 +1,7 @@
 # QG-03: Development Gate
 
 **Fase:** Na Developer Agent, vóór Reviewer Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 

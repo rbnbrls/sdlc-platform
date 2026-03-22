@@ -1,7 +1,7 @@
 # QG-04: Review Gate
 
 **Fase:** Na Reviewer Agent (na Secret Scanner), vóór Tester Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 

@@ -1,7 +1,7 @@
 # QG-02: Planning Gate
 
 **Fase:** Na Triage Agent, vóór Planner Agent
-**Evalueert:** n8n + Claude API
+**Evalueert:** n8n + OpenRouter API
 
 ## Verplichte criteria
 
