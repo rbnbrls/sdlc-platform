@@ -28,6 +28,7 @@ Importeer de bijbehorende JSON bestanden vanuit `workflows/n8n/`.
 | 17 | SDLC Project Event Handler | Webhook | Verwerk project-repo events |
 | 18 | SDLC Telegram Bot | Webhook | Verwerk Telegram commando's |
 | 19 | SDLC Sprint Planner | Manual/Schedule | Genereer sprint voorstel |
+| 20 | SDLC Product Owner Intake | Form/Webhook | Beoordeel user feature request |
 
 ---
 
@@ -375,11 +376,43 @@ Manual Trigger / Execute Workflow Trigger / Telegram command
 
 ---
 
+## Workflow 20: SDLC Product Owner Intake
+
+```
+Form Trigger / Webhook (https://n8n.7rb.nl/webhook/feature-request)
+  Input: Gebruiker vult in: Naam/Email, Project, Feature Titel, Beschrijving/Use-case
+
+  → [HTTP] Haal actuele backlog inhoud / titles op via Gitea API (https://git.7rb.nl/api/...)
+  → [HTTP] Haal shared/agents/product-owner.md op
+  → [HTTP] OpenRouter API: Product Owner Agent prompt (gpt-4o / claude / etc.)
+      Input: Feature Request (gebruiker), Bestaande Backlog Lijst
+      Taak: Kijk of er al een feature request is met (deels) overlappende requirements.
+      Output JSON: 
+      {
+        "bestaat_al": boolean,
+        "matching_ticket_id": "string (indien true)",
+        "reden": "Waarom wel of niet?",
+        "geoptimaliseerde_titel": "Aangescherpte feature titel",
+        "markdown_body": "Volledige geparseerde markdown conform SDLC structuur"
+      }
+  
+  → [Switch op bestaat_al]
+      true  → [HTTP] Maak commentaar aan in het bestaande ticket / voeg input toe
+            → [Email/SMTP] Mail gebruiker: "Bedankt! Jouw feature wens is toegevoegd aan een bestaand ticket ({matching_ticket_id})."
+            → Telegram: "🔁 Duplicate feature verzoek door PO toegevoegd aan {matching_ticket_id}"
+      false → [Code] Genereer frontmatter en inhoud (status=new)
+            → [HTTP] Push nieuw bestand naar Gitea repo (projects/{project}/backlog/features/FEAT-XXX.md)
+            → [Email/SMTP] Mail gebruiker: "Bedankt! Je ticket is in behandeling. ID: FEAT-XXX"
+            → Telegram: "💡 Nieuwe Feature Aanvraag van gebruiker! Titel: {geoptimaliseerde_titel} — door PO in triage geplaatst."
+```
+
+---
+
 ## n8n Environment Variabelen (bijgewerkt)
 
 | Variabele | Beschrijving |
 |-----------|-------------|
-| `GITEA_URL` | `http://{unraid-ip}:3000` |
+| `GITEA_URL` | `https://git.7rb.nl` |
 | `GITEA_TOKEN` | Gitea API token (read+write) |
 | `GITEA_ORG` | `sdlc-platform` |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
@@ -389,7 +422,7 @@ Manual Trigger / Execute Workflow Trigger / Telegram command
 | `OPENROUTER_MODEL_SCAN` | Default OpenRouter model (snel) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID |
-| `COOLIFY_URL` | `http://{unraid-ip}:8000` |
+| `COOLIFY_URL` | `https://coolify.7rb.nl` |
 | `COOLIFY_TOKEN` | Coolify API token |
 | `N8N_SECRET` | Webhook HMAC secret (32 bytes hex) |
-| `N8N_BASE_URL` | n8n externe URL (voor callback URLs) |
+| `N8N_BASE_URL` | `https://n8n.7rb.nl` |

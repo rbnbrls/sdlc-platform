@@ -9,7 +9,7 @@ zonder menselijke tussenkomst, tenzij een kwaliteitsgate dat vereist.
 new → triaged → planned → in-progress → review → testing → staging-verified → done → documented
 ```
 
-Enige externe afhankelijkheden: Gitea, n8n, Anthropic API, Coolify v4.
+Enige externe afhankelijkheden: Gitea, n8n, OpenRouter API, Coolify v4.
 
 
 ## Mapstructuur van `sdlc-platform` repo
@@ -50,7 +50,8 @@ sdlc-platform/
 │   │   ├── devops.md                  ← staging → productie, auto-rollback
 │   │   ├── documenter.md              ← bijwerkt docs + schrijft release notes
 │   │   ├── secret-scanner.md          ← NEW: scant git diff op secrets
-│   │   └── context-updater.md         ← NEW: verrijkt CLAUDE.md na elke cyclus
+│   │   ├── context-updater.md         ← NEW: verrijkt CLAUDE.md na elke cyclus
+│   │   └── product-owner.md           ← NEW: beoordeelt externe feature requests (form/webhook)
 │   ├── quality-gates/
 │   │   ├── QG-01_triage.md
 │   │   ├── QG-02_planning.md
@@ -75,7 +76,7 @@ sdlc-platform/
 │       └── sdlc-new.sh                ← NEW: CLI voor aanmaken werkitems
 │
 ├── workflows/
-│   └── n8n-workflows.md               ← Volledige n8n workflow specificaties (19 workflows)
+│   └── n8n-workflows.md               ← Volledige n8n workflow specificaties (20 workflows)
 │
 └── .gitea/
     └── workflows/
@@ -956,7 +957,7 @@ Stel deze in via n8n → Settings → Variables:
 
 | Variabele | Waarde |
 |-----------|--------|
-| `GITEA_URL` | `http://{unraid-ip}:3000` |
+| `GITEA_URL` | `https://git.7rb.nl` |
 | `GITEA_TOKEN` | Gitea API token (read+write) |
 | `GITEA_ORG` | `sdlc-platform` |
 | `OPENROUTER_API_KEY` | OpenRouter API key |
@@ -966,10 +967,10 @@ Stel deze in via n8n → Settings → Variables:
 | `OPENROUTER_MODEL_SCAN` | Default OpenRouter model (snel voor patroonherkenning) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_CHAT_ID` | Telegram chat ID |
-| `COOLIFY_URL` | `http://{unraid-ip}:8000` |
+| `COOLIFY_URL` | `https://coolify.7rb.nl` |
 | `COOLIFY_TOKEN` | Coolify API token |
 | `N8N_SECRET` | HMAC secret (32 bytes hex: `openssl rand -hex 32`) |
-| `N8N_BASE_URL` | n8n externe URL (voor Coolify callbacks) |
+| `N8N_BASE_URL` | `https://n8n.7rb.nl` |
 
 ---
 
@@ -1005,7 +1006,7 @@ Sla op als `projects/{naam}/CLAUDE.md`:
 - **Package manager:** {npm / pnpm / uv}
 
 ## Repo locatie
-- **Gitea URL:** http://{unraid-ip}:3000/sdlc-platform/{project-naam}
+- **Gitea URL:** https://git.7rb.nl/sdlc-platform/{project-naam}
 - **Lokaal pad (VSCode Server):** /workspace/{project-naam}
 
 ## Mapstructuur
@@ -1038,18 +1039,18 @@ Sla op als `projects/{naam}/CLAUDE.md`:
 
 ### Fase 0 — Voorbereiding (15 min)
 
-**0.1** Controleer dat deze containers actief zijn op Unraid:
-   - `gitea` (poort 3000)
-   - `n8n` (noteer poort)
-   - `coolify` (poort 8000)
+**0.1** Controleer dat deze services actief zijn op `*.7rb.nl`:
+   - Gitea: `https://git.7rb.nl`
+   - n8n: `https://n8n.7rb.nl`
+   - Coolify: `https://coolify.7rb.nl`
 
 **0.2** Genereer een Gitea API token:
    Gitea → avatar → Settings → Applications → Generate Token
    Sla op als `GITEA_TOKEN`
 
-**0.3** Genereer een Anthropic API key via console.anthropic.com
+**0.3** Genereer een OpenRouter API key via openrouter.ai/keys
 
-**0.4** Controleer of VSCode Server draait (`code-server` op Unraid)
+**0.4** Controleer of VSCode Server draait (of gebruik SSH naar de Coolify VM)
 
 ---
 
@@ -1059,9 +1060,9 @@ Sla op als `projects/{naam}/CLAUDE.md`:
 
 **1.2** New Repository → naam: `sdlc-platform`, init with README, branch: `main`
 
-**1.3** Clone de repo naar VSCode Server:
+**1.3** Clone de repo:
 ```bash
-git clone http://{unraid-ip}:3000/sdlc-platform/sdlc-platform.git
+git clone https://git.7rb.nl/sdlc-platform/sdlc-platform.git
 cd sdlc-platform
 ```
 
@@ -1100,7 +1101,7 @@ git push origin main
 **2.1** Gitea → Site Administration → Runners → Create Runner
    Kopieer het registratie-token
 
-**2.2** Voeg de runner toe als Docker container (via Dockge op Unraid):
+**2.2** Voeg de runner toe als Docker container (via Coolify → New Resource → Docker Compose):
 ```yaml
 services:
   gitea-runner:
@@ -1108,11 +1109,14 @@ services:
     restart: always
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /mnt/user/appdata/gitea-runner:/data
+      - runner_data:/data
     environment:
-      - GITEA_INSTANCE_URL=http://{unraid-ip}:3000
+      - GITEA_INSTANCE_URL=https://git.7rb.nl
       - GITEA_RUNNER_REGISTRATION_TOKEN={token}
-      - GITEA_RUNNER_NAME=unraid-runner
+      - GITEA_RUNNER_NAME=coolify-runner
+
+volumes:
+  runner_data:
 ```
 
 **2.3** Stel de secrets in op de `sdlc-platform` repo in Gitea:
@@ -1159,16 +1163,17 @@ services:
 **4.3** Stel branch protection in op `main`:
    Gitea → repo → Settings → Branches → Add rule → `main` → Require PRs
 
-**4.4** Clone de code-repo naar VSCode Server:
+**4.4** Clone de code-repo:
 ```bash
 cd /workspace
-git clone http://{unraid-ip}:3000/sdlc-platform/demo-project.git
+git clone https://git.7rb.nl/sdlc-platform/demo-project.git
 ```
 
 **4.5** Zet het project in Coolify:
-   Coolify → New Service → koppel de Gitea repo → kopieer de webhook URL
+   Coolify (`https://coolify.7rb.nl`) → New Resource → koppel de Gitea repo
+   Stel het domein in: `demo.7rb.nl` (productie) en `staging-demo.7rb.nl` (staging)
 
-**4.6** Vul de Coolify webhook URL in `projects/demo-project/CLAUDE.md`
+**4.6** Vul de Coolify app UUIDs in `projects/demo-project/CLAUDE.md`
 
 ---
 
@@ -1228,7 +1233,7 @@ Geen aanpassingen nodig in n8n.
 | Probleem | Oorzaak | Oplossing |
 |----------|---------|-----------|
 | Gitea Action triggert niet | Runner niet actief | Gitea → Admin → Runners: check status |
-| n8n ontvangt webhook niet | Firewall of verkeerde URL | Test met `curl -X POST {webhook-url}` vanuit Unraid |
+| n8n ontvangt webhook niet | Firewall of verkeerde URL | Test met `curl -X POST {webhook-url}` vanuit de Coolify VM |
 | Frontmatter update mislukt | Verkeerde SHA | Voeg altijd een GET /contents stap toe vóór de PUT |
 | OpenRouter API geeft 401 | API key verkeerd | Check n8n Variables: OPENROUTER_API_KEY |
 | Branch aanmaken mislukt | Repo bestaat niet | Zorg dat de code-repo bestaat in Gitea vóór de Planner |

@@ -14,7 +14,7 @@ if [[ -f "$CONF_FILE" ]]; then
   source "$CONF_FILE"
 fi
 
-GITEA_URL="${GITEA_URL:-http://localhost:3000}"
+GITEA_URL="${GITEA_URL:-https://git.7rb.nl}"
 GITEA_TOKEN="${GITEA_TOKEN:-}"
 GITEA_ORG="${GITEA_ORG:-sdlc-platform}"
 SDLC_REPO="${GITEA_ORG}/sdlc-platform"

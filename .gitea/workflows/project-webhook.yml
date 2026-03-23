@@ -24,17 +24,14 @@ jobs:
       - name: Stuur project event naar n8n
         if: steps.check.outputs.skip == 'false'
         run: |
+          PAYLOAD=$(cat <<EOF
+          {"event":"${{ github.event_name }}","project":"${{ github.repository }}","ref":"${{ github.ref }}","sha":"${{ github.sha }}","actor":"${{ github.actor }}","pr_number":"${{ github.event.pull_request.number }}","pr_action":"${{ github.event.action }}","pr_merged":"${{ github.event.pull_request.merged }}","timestamp":"$(date -u +%Y-%m-%dT%H:%M:%SZ)"}
+          EOF
+          )
+          PAYLOAD=$(echo "$PAYLOAD" | tr -d '[:space:]')
+          SIG=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac '${{ secrets.N8N_SECRET }}' | awk '{print $2}')
           curl -sf -X POST "${{ secrets.N8N_PROJECT_WEBHOOK }}" \
             -H "Content-Type: application/json" \
-            -H "X-Hub-Signature-256: sha256=$(echo -n '{}' | openssl dgst -sha256 -hmac '${{ secrets.N8N_SECRET }}' | awk '{print $2}')" \
-            -d "{
-              \"event\": \"${{ github.event_name }}\",
-              \"project\": \"${{ github.repository }}\",
-              \"ref\": \"${{ github.ref }}\",
-              \"sha\": \"${{ github.sha }}\",
-              \"actor\": \"${{ github.actor }}\",
-              \"pr_number\": \"${{ github.event.pull_request.number }}\",
-              \"pr_action\": \"${{ github.event.action }}\",
-              \"pr_merged\": \"${{ github.event.pull_request.merged }}\",
-              \"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"
-            }"
+            -H "X-Hub-Signature-256: sha256=$SIG" \
+            -d "$PAYLOAD"
+

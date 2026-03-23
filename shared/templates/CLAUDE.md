@@ -11,7 +11,7 @@
 - **Package manager:** {npm / pnpm / uv}
 
 ## Repo locatie
-- **Gitea URL:** http://{unraid-ip}:3000/sdlc-platform/{project-naam}
+- **Gitea URL:** https://git.7rb.nl/sdlc-platform/{project-naam}
 - **Lokaal pad (VSCode Server):** /workspace/{project-naam}
 
 ## Mapstructuur

@@ -1,0 +1,63 @@
+graph LR
+    subgraph "📥 Intake"
+        A[new] -->|"Gitea Action<br/>+ HMAC webhook"| B[SDLC Router]
+    end
+
+    subgraph "🔍 Analyse"
+        B -->|status=new| C[Triage Agent]
+        C -->|"QG-01 ✅"| D[triaged]
+        C -->|"needs-human"| NH1[⚠️ Menselijke input]
+    end
+
+    subgraph "📋 Planning"
+        D -->|status=triaged| E[Planner Agent]
+        E -->|"QG-02 ✅<br/>branch + draft PR"| F[planned]
+    end
+
+    subgraph "👨‍💻 Ontwikkeling"
+        F -->|status=planned| G[Developer Agent]
+        G -->|"QG-03 ✅"| H[review]
+        G -->|"retry ≤ 3"| G
+        G -->|"retry > 3"| NH2[⚠️ Menselijke input]
+    end
+
+    subgraph "🔐 Beveiliging"
+        H -->|status=review| I[Secret Scanner]
+        I -->|"QG-03b ✅"| J[Reviewer Agent]
+        I -->|"secret gevonden"| G
+    end
+
+    subgraph "🔍 Review"
+        J -->|"QG-04 ✅<br/>PR approved"| K[testing]
+        J -->|"blocking issues"| G
+    end
+
+    subgraph "🧪 Testen"
+        K -->|status=testing| L[Tester Agent]
+        L -->|"QG-05 + QG-05b ✅"| M[staging-verified]
+        L -->|"tests failed"| G
+        L -->|"critical vuln"| NH3[⚠️ Menselijke input]
+    end
+
+    subgraph "🚀 Deployment"
+        M -->|status=staging-verified| N[DevOps Agent]
+        N -->|"staging ✅ → prod ✅<br/>QG-06b + QG-06"| O[done]
+        N -->|"deploy failed<br/>auto-rollback"| DF[💥 deploy-failed]
+    end
+
+    subgraph "📝 Documentatie"
+        O -->|status=done| P[Documenter Agent]
+        P -->|"QG-07 ✅"| Q[documented]
+    end
+
+    subgraph "🧠 Leren"
+        Q -->|status=documented| R[Context Updater]
+        R -->|"CLAUDE.md verrijkt"| S[✅ Pipeline Compleet]
+    end
+
+    style A fill:#e1f5fe
+    style S fill:#c8e6c9
+    style NH1 fill:#fff3e0
+    style NH2 fill:#fff3e0
+    style NH3 fill:#fff3e0
+    style DF fill:#ffcdd2

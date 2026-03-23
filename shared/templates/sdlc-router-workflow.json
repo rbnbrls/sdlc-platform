@@ -14,293 +14,220 @@
       }
     },
     {
-      "id": "switch",
-      "name": "Route by Type",
+      "id": "verify_hmac",
+      "name": "Verify HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300],
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst sig = $input.first().headers['x-hub-signature-256'];\nconst expected = 'sha256=' + crypto.createHmac('sha256', $env.N8N_SECRET)\n  .update(JSON.stringify($input.first().body)).digest('hex');\nif (sig !== expected) throw new Error('Invalid HMAC signature');\nreturn $input.all();"
+      }
+    },
+    {
+      "id": "parse_frontmatter",
+      "name": "Parse Frontmatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300],
+      "parameters": {
+        "jsCode": "// Split pipe-separated files and fetch each via Gitea API\n// Parse YAML frontmatter from each file\n// Return items with parsed status, type, project, id\nconst items = $input.first().json;\nconst files = items.files.split('|');\nconst results = [];\nfor (const file of files) {\n  results.push({ json: { filePath: file.trim(), status: 'new' } });\n}\nreturn results;"
+      }
+    },
+    {
+      "id": "switch_status",
+      "name": "Route by Status",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
-      "position": [550, 300],
+      "position": [900, 300],
       "parameters": {
         "dataType": "string",
-        "value1": "={{ $json.type }}",
+        "value1": "={{ $json.status }}",
         "rules": {
           "rules": [
             {
               "operation": "equal",
-              "value2": "epic",
+              "value2": "new",
               "output": 0
             },
             {
               "operation": "equal",
-              "value2": "story",
+              "value2": "triaged",
               "output": 1
             },
             {
               "operation": "equal",
-              "value2": "task",
+              "value2": "planned",
               "output": 2
             },
             {
               "operation": "equal",
-              "value2": "bug",
+              "value2": "in-progress",
+              "output": 2
+            },
+            {
+              "operation": "equal",
+              "value2": "review",
               "output": 3
+            },
+            {
+              "operation": "equal",
+              "value2": "testing",
+              "output": 4
+            },
+            {
+              "operation": "equal",
+              "value2": "staging-verified",
+              "output": 5
+            },
+            {
+              "operation": "equal",
+              "value2": "done",
+              "output": 6
+            },
+            {
+              "operation": "equal",
+              "value2": "documented",
+              "output": 7
+            },
+            {
+              "operation": "equal",
+              "value2": "needs-human",
+              "output": 8
+            },
+            {
+              "operation": "equal",
+              "value2": "deploy-failed",
+              "output": 9
             }
           ]
         },
-        "fallbackOutput": 4
+        "fallbackOutput": 10
       }
     },
     {
-      "id": "planner",
-      "name": "Planner Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [850, 150],
-      "parameters": {
-        "url": "http://agent-planner:8080/webhook",
-        "method": "POST",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "type",
-              "value": "={{ $json.type }}"
-            },
-            {
-              "name": "title",
-              "value": "={{ $json.title }}"
-            },
-            {
-              "name": "file",
-              "value": "={{ $json.file }}"
-            },
-            {
-              "name": "project",
-              "value": "={{ $json.project }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "developer",
-      "name": "Developer Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [850, 300],
-      "parameters": {
-        "url": "http://agent-developer:8080/webhook",
-        "method": "POST",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "type",
-              "value": "={{ $json.type }}"
-            },
-            {
-              "name": "title",
-              "value": "={{ $json.title }}"
-            },
-            {
-              "name": "file",
-              "value": "={{ $json.file }}"
-            },
-            {
-              "name": "project",
-              "value": "={{ $json.project }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "tester",
-      "name": "Tester Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [850, 450],
-      "parameters": {
-        "url": "http://agent-tester:8080/webhook",
-        "method": "POST",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "type",
-              "value": "={{ $json.type }}"
-            },
-            {
-              "name": "title",
-              "value": "={{ $json.title }}"
-            },
-            {
-              "name": "file",
-              "value": "={{ $json.file }}"
-            },
-            {
-              "name": "project",
-              "value": "={{ $json.project }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "devops",
-      "name": "DevOps Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [850, 600],
-      "parameters": {
-        "url": "http://agent-devops:8080/webhook",
-        "method": "POST",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "type",
-              "value": "={{ $json.type }}"
-            },
-            {
-              "name": "title",
-              "value": "={{ $json.title }}"
-            },
-            {
-              "name": "file",
-              "value": "={{ $json.file }}"
-            },
-            {
-              "name": "project",
-              "value": "={{ $json.project }}"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "unknown",
-      "name": "Unknown Type",
-      "type": "n8n-nodes-base.noOp",
+      "id": "triage_agent",
+      "name": "SDLC Triage Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [850, 750],
+      "position": [1200, -100],
       "parameters": {}
     },
     {
-      "id": "respond",
-      "name": "Respond",
-      "type": "n8n-nodes-base.respondToWebhook",
+      "id": "planner_agent",
+      "name": "SDLC Planner Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1100, 300],
+      "position": [1200, 0],
+      "parameters": {}
+    },
+    {
+      "id": "developer_agent",
+      "name": "SDLC Developer Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 100],
+      "parameters": {}
+    },
+    {
+      "id": "secret_scanner",
+      "name": "SDLC Secret Scanner",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 200],
+      "parameters": {}
+    },
+    {
+      "id": "tester_agent",
+      "name": "SDLC Tester Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 300],
+      "parameters": {}
+    },
+    {
+      "id": "devops_agent",
+      "name": "SDLC DevOps Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 400],
+      "parameters": {}
+    },
+    {
+      "id": "documenter_agent",
+      "name": "SDLC Documenter Agent",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 500],
+      "parameters": {}
+    },
+    {
+      "id": "context_updater",
+      "name": "SDLC Context Updater",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1200, 600],
+      "parameters": {}
+    },
+    {
+      "id": "notify_needs_human",
+      "name": "Telegram: Needs Human",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1200, 700],
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { \"status\": \"processed\", \"type\": $json.type } }}"
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=⚠️ Menselijke input vereist: {{ $json.id }} — {{ $json.title }}"
       }
+    },
+    {
+      "id": "notify_deploy_failed",
+      "name": "Telegram: Deploy Failed",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1200, 800],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=💥 Deploy gefaald: {{ $json.id }} — menselijke actie vereist"
+      }
+    },
+    {
+      "id": "unknown_status",
+      "name": "Unknown Status",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1200, 900],
+      "parameters": {}
     }
   ],
   "connections": {
     "Webhook": {
       "main": [
-        [
-          {
-            "node": "Route by Type",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Verify HMAC", "type": "main", "index": 0 }]
       ]
     },
-    "Route by Type": {
+    "Verify HMAC": {
       "main": [
-        [
-          {
-            "node": "Planner Agent",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Developer Agent",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Developer Agent",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Tester Agent",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Unknown Type",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Parse Frontmatter", "type": "main", "index": 0 }]
       ]
     },
-    "Planner Agent": {
+    "Parse Frontmatter": {
       "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Route by Status", "type": "main", "index": 0 }]
       ]
     },
-    "Developer Agent": {
+    "Route by Status": {
       "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Tester Agent": {
-      "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "DevOps Agent": {
-      "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Unknown Type": {
-      "main": [
-        [
-          {
-            "node": "Respond",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "SDLC Triage Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Planner Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Developer Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Secret Scanner", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Tester Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC DevOps Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Documenter Agent", "type": "main", "index": 0 }],
+        [{ "node": "SDLC Context Updater", "type": "main", "index": 0 }],
+        [{ "node": "Telegram: Needs Human", "type": "main", "index": 0 }],
+        [{ "node": "Telegram: Deploy Failed", "type": "main", "index": 0 }],
+        [{ "node": "Unknown Status", "type": "main", "index": 0 }]
       ]
     }
   },
@@ -310,6 +237,6 @@
   "staticData": null,
   "tags": ["sdlc"],
   "triggerCount": 0,
-  "updatedAt": "2026-03-21T20:27:00Z",
+  "updatedAt": "2026-03-23T21:00:00Z",
   "createdAt": "2026-03-21T20:27:00Z"
 }
