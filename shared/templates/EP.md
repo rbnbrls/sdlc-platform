@@ -10,6 +10,8 @@ updated: YYYY-MM-DD
 target_version: ""      # optioneel
 features: []            # wordt ingevuld door Triage/Planner: [FE-001, FE-002]
 documented_at: ""
+processing_started: ""
+processing_updated: ""
 triage_notes: ""
 ---
 

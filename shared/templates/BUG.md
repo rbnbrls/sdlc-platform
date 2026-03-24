@@ -17,6 +17,8 @@ commit: ""
 test_result: ""
 deployed_at: ""
 documented_at: ""
+processing_started: ""
+processing_updated: ""
 triage_notes: ""
 ---
 

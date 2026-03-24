@@ -16,6 +16,8 @@ commit: ""
 deployed_at: ""
 documented_at: ""
 retry_count: 0
+processing_started: ""
+processing_updated: ""
 triage_notes: ""
 ---
 

@@ -21,6 +21,8 @@ deployed_at: ""         # productie-deployment timestamp
 documented_at: ""
 retry_count: 0
 plan: ""                # pad naar plan bestand of inline JSON
+processing_started: ""
+processing_updated: ""
 triage_notes: ""
 ---
 

@@ -15,6 +15,8 @@ commit: ""
 pr_number: ""
 test_result: ""         # pass | fail
 retry_count: 0          # wordt bijgehouden door n8n
+processing_started: ""
+processing_updated: ""
 ---
 
 ## Story
