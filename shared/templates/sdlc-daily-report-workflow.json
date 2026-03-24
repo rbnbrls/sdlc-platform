@@ -1,0 +1,221 @@
+{
+  "name": "SDLC Daily Report",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Schedule Trigger (08:00)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_tree",
+      "name": "Get Backlog Files",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/projects?recursive=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "calc_stats",
+      "name": "Bereken statistieken",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const allItems = $input.all().map(i => i.json);\nconst now = new Date();\nconst yesterday = new Date(now - 86400000);\nconst weekAgo = new Date(now - 7 * 86400000);\n\nconst todayStr = now.toISOString().split('T')[0];\nconst yesterdayStr = yesterday.toISOString().split('T')[0];\n\nconst stats = {\n  by_status: {},\n  completed_today: [],\n  completed_this_week: [],\n  needs_human: [],\n  high_retry: [],\n  stale: [],\n  in_pipeline: [],\n  total_cost_today: 0,\n  total_cost_this_week: 0,\n  total_cost_all: 0\n};\n\nconst TERMINAL = ['documented', 'needs-human', 'deploy-failed'];\nconst STALE_MS = 30 * 60 * 1000;\n\nallItems.forEach(item => {\n  stats.by_status[item.status] = (stats.by_status[item.status] || 0) + 1;\n  \n  if (item.status === 'documented') {\n    if (item.processing_updated?.startsWith(todayStr)) {\n      stats.completed_today.push(item);\n    }\n    if (new Date(item.processing_updated) > weekAgo) {\n      stats.completed_this_week.push(item);\n    }\n  }\n  \n  if (item.status === 'needs-human') {\n    stats.needs_human.push(item);\n  }\n  \n  if (parseInt(item.retry_count) >= 2 && !TERMINAL.includes(item.status)) {\n    stats.high_retry.push(item);\n  }\n  \n  if (!TERMINAL.includes(item.status) && item.status !== 'new' && item.processing_updated) {\n    const lastUpdate = new Date(item.processing_updated);\n    if (now - lastUpdate > STALE_MS) {\n      stats.stale.push(item);\n    }\n  }\n  \n  if (!TERMINAL.includes(item.status) && item.status !== 'new') {\n    stats.in_pipeline.push(item);\n  }\n  \n  const cost = parseFloat(item.api_cost_usd) || 0;\n  stats.total_cost_all += cost;\n  if (item.processing_updated?.startsWith(todayStr)) {\n    stats.total_cost_today += cost;\n  }\n  if (new Date(item.processing_updated) > weekAgo) {\n    stats.total_cost_this_week += cost;\n  }\n});\n\nreturn [{ json: stats }];"
+      }
+    },
+    {
+      "id": "format_msg",
+      "name": "Formatteer dagrapport bericht",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const s = $input.first().json;\nconst date = new Date().toLocaleDateString('nl-NL', { \n  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',\n  timeZone: 'Europe/Amsterdam'\n});\n\nlet msg = `📊 *SDLC Dagrapport*\\n_${date}_\\n\\n`;\n\nconst pipelineStatuses = ['triaged', 'planned', 'in-progress', 'review', 'testing', 'staging-verified', 'done'];\nconst pipelineItems = pipelineStatuses\n  .map(st => s.by_status[st] ? `${st}: ${s.by_status[st]}` : null)\n  .filter(Boolean);\n\nmsg += `🔄 *Pipeline:* ${s.in_pipeline.length} actief\\n`;\nif (pipelineItems.length) {\n  msg += pipelineItems.map(p => `  • ${p}`).join('\\n') + '\\n';\n}\nmsg += '\\n';\n\nmsg += `✅ *Voltooid:*\\n`;\nmsg += `  Vandaag: ${s.completed_today.length} items\\n`;\nmsg += `  Deze week: ${s.completed_this_week.length} items\\n\\n`;\n\nmsg += `🆕 *Nieuw (wachten):* ${s.by_status['new'] || 0} items\\n\\n`;\n\nmsg += `💰 *API Kosten:*\\n`;\nmsg += `  Vandaag: $${s.total_cost_today.toFixed(4)}\\n`;\nmsg += `  Deze week: $${s.total_cost_this_week.toFixed(4)}\\n\\n`;\n\nconst attentionCount = s.needs_human.length + s.high_retry.length + s.stale.length;\nif (attentionCount > 0) {\n  msg += `⚠️ *Aandacht vereist (${attentionCount} items):*\\n`;\n  \n  s.needs_human.forEach(i => {\n    msg += `  🔴 \\`${i.id}\\` — needs-human\\n`;\n    msg += `     ${i.last_error || 'Geen reden opgegeven'}\\n`;\n  });\n  \n  s.high_retry.forEach(i => {\n    msg += `  🟠 \\`${i.id}\\` — ${i.retry_count}x retry (status: ${i.status})\\n`;\n  });\n  \n  s.stale.forEach(i => {\n    const ageMin = Math.round((new Date() - new Date(i.processing_updated)) / 60000);\n    msg += `  🟡 \\`${i.id}\\` — stale (${ageMin} min, agent: ${i.current_agent})\\n`;\n  });\n} else {\n  msg += `✨ *Geen aandacht vereist*\\n`;\n}\n\nreturn [{ json: { text: msg, needs_human_items: s.needs_human } }];"
+      }
+    },
+    {
+      "id": "send_report",
+      "name": "Stuur dagrapport via Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $env.TELEGRAM_CHAT_ID }}\",\n  \"text\": \"{{ $json.text }}\",\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "split_actions",
+      "name": "Split Inline Buttons",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "jsCode": "return $input.first().json.needs_human_items.map(i => ({ json: i }));"
+      }
+    },
+    {
+      "id": "gen_keyboard",
+      "name": "Genereer inline keyboard bericht per needs-human item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\n\nreturn [{\n  json: {\n    chat_id: $env.TELEGRAM_CHAT_ID,\n    text: `🔴 *Actie vereist: ${item.id}*\\n\\n` +\n          `Project: ${item.project}\\n` +\n          `Reden: ${item.last_error || 'Niet gespecificeerd'}\\n` +\n          `Status was: ${item.status}`,\n    parse_mode: 'Markdown',\n    reply_markup: {\n      inline_keyboard: [[\n        {\n          text: '✅ Goedkeuren & hervat',\n          callback_data: `approve:${item.id}:${item.file_path}`\n        },\n        {\n          text: '❌ Afwijzen & archiveer',\n          callback_data: `reject:${item.id}:${item.file_path}`\n        }\n      ], [\n        {\n          text: '🔄 Herstart agent',\n          callback_data: `restart:${item.id}:${item.file_path}`\n        },\n        {\n          text: '📄 Bekijk item',\n          url: `https://git.7rb.nl/sdlc-platform/sdlc-platform/src/branch/main/${item.file_path}`\n        }\n      ]]\n    }\n  }\n}];"
+      }
+    },
+    {
+      "id": "send_keyboard",
+      "name": "Stuur inline keyboard via Telegram API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (08:00)": {
+      "main": [
+        [
+          {
+            "node": "Get Backlog Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Backlog Files": {
+      "main": [
+        [
+          {
+            "node": "Bereken statistieken",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bereken statistieken": {
+      "main": [
+        [
+          {
+            "node": "Formatteer dagrapport bericht",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatteer dagrapport bericht": {
+      "main": [
+        [
+          {
+            "node": "Stuur dagrapport via Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stuur dagrapport via Telegram": {
+      "main": [
+        [
+          {
+            "node": "Split Inline Buttons",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Inline Buttons": {
+      "main": [
+        [
+          {
+            "node": "Genereer inline keyboard bericht per needs-human item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Genereer inline keyboard bericht per needs-human item": {
+      "main": [
+        [
+          {
+            "node": "Stuur inline keyboard via Telegram API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "telegram"
+  ]
+}

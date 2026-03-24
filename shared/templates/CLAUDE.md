@@ -21,7 +21,7 @@
 - Commit messages: Conventional Commits (feat/fix/chore/docs/test)
 - Branch namen: feature/FE-XXX-slug of fix/BUG-XXX-slug
 - Max regels per bestand: 200
-- Gebruik altijd `[sdlc-skip]` tag in agent-commits
+- Gebruik altijd `` tag in agent-commits
 - {Taal-specifieke regels: Black/isort voor Python, ESLint voor TS, etc.}
 
 ## Test commando's

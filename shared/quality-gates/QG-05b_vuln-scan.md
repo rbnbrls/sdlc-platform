@@ -29,7 +29,7 @@
   beoordelen. Blokkeer dan NIET automatisch.
 
 ## Bij falen (critical of high)
-- `status` → `needs-human`
+- `status` → `needs-human` (en bewaar de huidige status in `previous_status`)
 - Telegram: "🔒 Kritieke vulnerability in {project}: {package}@{versie} — CVE-{id} ({severity})"
 - Voeg vulnerability details toe aan het .md werkitem
 - Menselijke actie vereist: dependency updaten of vulnerability documenteren als uitzondering

@@ -10,62 +10,45 @@ aan het project werken.
 Je ontvangt:
 1. Het voltooide `.md` backlog item (bug, feature, story, epic of issue)
 2. `CLAUDE.md` van het project
-3. Huidige inhoud van `projects/{project}/docs/PROJECT.md` (indien bestaat)
-4. Huidige inhoud van `projects/{project}/docs/CHANGELOG.md` (indien bestaat)
+3. Alleen de specifieke sectie uit `PROJECT.md` die bijgewerkt moet worden (tussen de `<!-- SECTION:naam -->` markers)
+4. Huidige inhoud van `CHANGELOG.md` (indien bestaat)
 5. Lijst van alle `.md` bestanden in `projects/{project}/backlog/` (voor context)
 
 ## Taken
 
 ### 1. PROJECT.md bijwerken
-`PROJECT.md` is de levende projectdocumentatie. Houd hem synchroon met wat er
-daadwerkelijk gebouwd en gedeployed is.
+`PROJECT.md` is de levende projectdocumentatie. Je ontvangt alleen de sectie die relevant is voor het voltooide item (bijv. `features` voor een feature).
+Werk deze sectie bij met de nieuwe informatie, maar VERWIJDER NIETS uit de bestaande tekst.
+Retourneer ALLEEN de nieuwe sectie-inhoud (tussen de markers).
 
 **Bijwerken op basis van type voltooid item:**
 
-**Bug (done):**
-- Voeg toe aan sectie `## Bekende issues` → verplaats van "open" naar "opgelost"
-- Noteer de fix in de sectie `## Recente wijzigingen`
+**Bug of Issue (done):**
+- Werk de sectie `known-issues` bij: verplaats van "open" naar "opgelost"
 
-**Feature / Story (done):**
-- Voeg de nieuwe functionaliteit toe aan sectie `## Functionaliteiten`
+**Feature of Story (done):**
+- Voeg de nieuwe functionaliteit toe aan sectie `features`
 - Beschrijf het gebruikersgericht: wat *kan* de gebruiker nu?
-- Update `## Technische architectuur` als er nieuwe componenten, API-endpoints
-  of datastructuren zijn toegevoegd
-- Update `## Recente wijzigingen`
 
 **Epic (done):**
-- Voeg toe aan `## Mijlpalen` met de afrondingsdatum
-- Vat samen welke features het epic omvatte
-
-**Issue (done):**
-- Noteer de verbetering in `## Recente wijzigingen`
-- Update relevante secties (bijv. `## Performance`, `## Veiligheid`) indien van toepassing
+- Werk sectie `mijlpalen` of relevante secties bij indien gevraagd.
 
 ### 2. CHANGELOG.md bijwerken
-Voeg een entry toe aan het begin van de changelog (nieuwste bovenaan).
+Voeg een entry toe aan het begin van de changelog (nieuwste bovenaan). Gebruik het aangeleverde versienummer (formaat `YYYY.MM.DD-N`).
 
 Formaat per entry:
 ```markdown
-## [{versie of datum}] — {YYYY-MM-DD}
+## [{Versienummer}] — {YYYY-MM-DD}
 
-### Added
+### Features
 - {nieuwe functionaliteiten}
 
-### Fixed
+### Bug fixes
 - {opgeloste bugs}
 
-### Changed
-- {gewijzigd gedrag}
-
-### Removed
-- {verwijderde functionaliteit}
+### Technische wijzigingen
+- {gewijzigd gedrag, refactoring, dependencies}
 ```
-
-Gebruik de datum van `deployed_at` uit de frontmatter als beschikbaar,
-anders de datum van vandaag.
-
-Versienummer: gebruik semantic versioning als het project een versie bijhoudt
-(zie CLAUDE.md), anders gebruik de datum als identifier: `[YYYY-MM-DD]`.
 
 ### 3. AGENTS.md bijwerken (optioneel maar aanbevolen)
 Als het voltooide item nieuwe conventies, patronen of architectuurkeuzes introduceert,
@@ -101,5 +84,5 @@ bedoeld als context voor toekomstige AI agents.
 - Maak `docs/` map aan als die nog niet bestaat
 - Maak `PROJECT.md` en `CHANGELOG.md` aan vanuit de templates als ze nog niet bestaan
 - Verander NOOIT de structuur van het backlog item zelf
-- Zet in de commit message: `docs({id}): update documentatie na {id} [sdlc-skip]`
+- Zet in de commit message: `docs({id}): update documentatie na {id}`
 - Bij twijfel over een sectie: voeg toe, verwijder nooit stilzwijgend

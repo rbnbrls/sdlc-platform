@@ -87,16 +87,21 @@ Execute Workflow Trigger
   → [HTTP] Haal actieve milestone op (Gitea API /milestones?state=open)
   → [HTTP] OpenRouter API: maak plan (model: OPENROUTER_MODEL_DEV, max 4000 tokens)
   → [Code] Parse JSON response
-  → [HTTP] Maak branch aan in projectrepo (Gitea API POST /branches)
+  → [HTTP] Check of branch al bestaat (GET /branches/{branch_name})
+  → [IF] Branch bestaat niet?
+      ja → [HTTP] Maak branch aan in projectrepo (Gitea API POST /branches)
   → [HTTP] Maak draft PR aan (Gitea API POST /pulls)
       Body: { title, head, base: "main", draft: true, body, milestone_id }
   → [HTTP] Sla PR number op in frontmatter: pr_number=X
   → [IF] type = feature?
-      ja → [Loop] Per story in plan (volgorde op depends_on DAG):
+      ja → [Code] Maak tijdelijke branch aan voor stories: sdlc-planner-temp-{timestamp}
+           [HTTP] Maak tijdelijke branch aan van main (Gitea API)
+           [Loop] Per story in plan (volgorde op depends_on DAG):
                [Code] Genereer US .md vanuit template
-               [HTTP] Schrijf story naar sdlc-platform repo
-           → [HTTP] Update features[] in parent epic frontmatter
-  → [HTTP] Update frontmatter: status=planned, branch={name} [sdlc-skip]
+               [HTTP] Schrijf story naar tijdelijke branch (bouwt voort op vorige commit)
+           [HTTP] Merge tijdelijke branch naar main en verwijder
+           [HTTP] Update features[] in parent epic frontmatter
+  → [HTTP] Update frontmatter: status=planned, branch={name}
   → Telegram: "📋 Plan: {id} → {n} stories, branch: {branch}, PR: #{pr_number}"
 ```
 
@@ -151,7 +156,12 @@ Execute Workflow Trigger
 ```
 Execute Workflow Trigger
   → [HTTP] Haal CLAUDE.md op (staging_uuid, production_uuid, health_url)
-  → [HTTP] Merge PR via Gitea API (POST /pulls/{pr}/merge)
+  → [HTTP] Compare branch met main (GET /compare/main...{branch})
+  → [Code] Check merge conflicten (diffstat.behind > 0)
+  → [IF] Kan mergen zonder conflict?
+      nee → Update frontmatter: status=needs-human, last_error="Merge conflict..."
+          → Telegram: "⚠️ Merge conflict voor {id}: handmatige rebase vereist"
+      ja  → [HTTP] Merge PR via Gitea API (POST /pulls/{pr}/merge)
   → [HTTP] Trigger staging deployment (Coolify API POST /applications/{staging_uuid}/start)
   
   WACHT OP COOLIFY STAGING WEBHOOK (niet pollen!):
@@ -168,14 +178,15 @@ Execute Workflow Trigger
             → [Wait] Tot event handler 'finished' meldt voor prod_uuid
             → [Execute] SDLC Quality Gate Checker (QG-06: productie verificatie)
             → [IF] prod health OK?
-                ja  → [HTTP] Update frontmatter: status=done, deployed_at=[timestamp] [sdlc-skip]
+                ja  → [HTTP] Update frontmatter: status=done, deployed_at=[timestamp]
                       → [HTTP] Gitea commit status: success
                       → Telegram: "🚀 {id} live in productie!"
                 nee → [HTTP] Rollback productie (GET previous deployment, POST restart)
-                      → [HTTP] Update frontmatter: status=deploy-failed [sdlc-skip]
-                      → Telegram: "💥 Productie deploy gefaald: {id} — rollback uitgevoerd"
+                      → [HTTP] Rollback Health Check (GET production_url)
+                      → [HTTP] Update frontmatter: status=deploy-failed
+                      → Telegram: "💥 Productie deploy gefaald: {id} — rollback uitgevoerd (health: {health})"
       nee → [HTTP] Rollback staging
-            → [HTTP] Update frontmatter: status=deploy-failed [sdlc-skip]
+            → [HTTP] Update frontmatter: status=deploy-failed
             → Telegram: "🚧 Staging verificatie gefaald: {id} — productie NIET gestart"
 ```
 
@@ -189,10 +200,10 @@ Error Trigger (ingesteld als Error Workflow op alle andere workflows)
   → [HTTP] Haal huidig item op uit sdlc-platform repo
   → [Code] retry_count + 1
   → [IF] retry_count >= 3?
-      ja  → [HTTP] Update frontmatter: status=needs-human [sdlc-skip]
+      ja  → [HTTP] Update frontmatter: status=needs-human
             → Telegram: "🚨 SDLC Error (3x geprobeerd)\nWorkflow: {naam}\nItem: {id}\nFout: {error}"
       nee → [Code] Wacht 5 minuten (delay node)
-            → [HTTP] Update frontmatter: retry_count={N} [sdlc-skip]
+            → [HTTP] Update frontmatter: retry_count={N}
             → Telegram: "🔄 Retry {N}/3: {id} (fout: {error})"
             → [Execute] Herstart de gefaalde workflow met dezelfde input
 ```
@@ -251,7 +262,7 @@ Schedule Trigger: elke 2 uur
     - Items per project
   → [Code] Genereer DASHBOARD.md content
   → [HTTP] Haal huidige DASHBOARD.md SHA op
-  → [HTTP] Schrijf DASHBOARD.md naar sdlc-platform root [sdlc-skip]
+  → [HTTP] Schrijf DASHBOARD.md naar sdlc-platform root
 ```
 
 **DASHBOARD.md formaat:**
@@ -334,16 +345,16 @@ Webhook (POST /telegram-bot)
       
       /approve {id}  → [HTTP] Haal frontmatter op
                         → IF status == 'needs-human':
-                          [HTTP] Update status terug naar vorige status [sdlc-skip]
+                          [HTTP] Update status terug naar vorige status
                           Telegram: "✅ {id} goedgekeurd — pipeline hervat"
                         → ELSE:
                           Telegram: "❌ {id} staat niet op needs-human (staat op: {status})"
       
-      /skip {id}     → [HTTP] Update frontmatter: status=documented [sdlc-skip]
+      /skip {id}     → [HTTP] Update frontmatter: status=documented
                         → Telegram: "⏭️ {id} overgeslagen → documented"
       
       /retry {id}    → [HTTP] Haal frontmatter op
-                        → [HTTP] Update retry_count=0 [sdlc-skip]
+                        → [HTTP] Update retry_count=0
                         → Trigeer SDLC Router voor dit item
                         → Telegram: "🔄 {id} herstart (retry_count gereset)"
       
@@ -426,3 +437,41 @@ Form Trigger / Webhook (https://n8n.7rb.nl/webhook/feature-request)
 | `COOLIFY_TOKEN` | Coolify API token |
 | `N8N_SECRET` | Webhook HMAC secret (32 bytes hex) |
 | `N8N_BASE_URL` | `https://n8n.7rb.nl` |
+
+---
+
+## Generieke Cost Tracker helper (toe te passen in alle Agent workflows)
+
+Voeg direct na elke OpenRouter HTTP call ('chat completion') in een Agent workflow de volgende Node toe:
+
+### Code node: `Extract API Cost`
+
+```javascript
+// Voeg toe na elke OpenRouter API call
+const response = $input.first().json;
+
+// OpenRouter kosten
+const thisCost = response.usage?.total_cost || 0;
+
+// Haal huidige cumulatieve kosten op uit de frontmatter
+const currentCost = parseFloat($('Parse Frontmatter').first().json.api_cost_usd) || 0;
+const newTotalCost = currentCost + thisCost;
+
+return [{
+  json: {
+    ...response,
+    _cost_this_call: thisCost,
+    _cost_cumulative: Math.round(newTotalCost * 100000) / 100000,
+    _tokens_used: response.usage?.total_tokens || 0
+  }
+}];
+```
+
+Integreer vervolgens deze geüpdatete cost en de tokens in de Frontmatter builder:
+```javascript
+// Code node: Bouw frontmatter updates
+const updates = {
+  // ... andere status updates ...
+  api_cost_usd: $('Extract API Cost').first().json._cost_cumulative
+};
+```

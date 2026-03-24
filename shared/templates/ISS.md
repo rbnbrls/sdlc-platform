@@ -4,6 +4,7 @@ type: issue
 project: PROJECTNAAM
 title: ""
 status: new
+previous_status: ""
 priority: medium        # low | medium | high | critical
 category: performance   # performance | security | ux | technical-debt | dependency
 created: YYYY-MM-DD
@@ -16,8 +17,12 @@ commit: ""
 deployed_at: ""
 documented_at: ""
 retry_count: 0
+# Pipeline tracking (ingevuld door n8n, niet door mens)
 processing_started: ""
 processing_updated: ""
+current_agent: ""
+last_error: ""
+api_cost_usd: 0.0000
 triage_notes: ""
 ---
 
@@ -33,3 +38,6 @@ triage_notes: ""
 ## Acceptatiecriteria
 - [ ] 
 - [ ] 
+
+## Review Feedback
+<!-- Ingevuld door Reviewer Agent. De Developer Agent verwijdert afgevinkte items. -->

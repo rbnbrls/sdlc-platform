@@ -11,11 +11,11 @@ jobs:
   notify-sdlc:
     runs-on: ubuntu-latest
     steps:
-      - name: Controleer op sdlc-agent commits (voorkom loop)
+      - name: Controleer op sdlc-bot (voorkom loop)
         id: check
         run: |
-          MSG="${{ github.event.head_commit.message || github.event.pull_request.title }}"
-          if [[ "$MSG" == *"[sdlc-skip]"* ]]; then
+          COMMITTER="${{ github.event.head_commit.committer.name }}"
+          if [[ "$COMMITTER" == "sdlc-bot" ]]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
             echo "skip=false" >> $GITHUB_OUTPUT

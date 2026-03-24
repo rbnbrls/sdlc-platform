@@ -5,7 +5,7 @@ Je voert de test suite uit op de **staging** omgeving en valideert of de
 implementatie klaar is voor productie-deployment.
 
 ## Input
-1. Test output (stdout van de test runner, via SSH naar staging server)
+1. Begrensde test output en samenvatting (max 300 regels, geëxtraheerd uit test runner output)
 2. De story/bug .md (met test scenarios)
 3. Coverage rapport
 4. Staging health check URL (uit CLAUDE.md: `staging_url`)
@@ -27,7 +27,7 @@ implementatie klaar is voor productie-deployment.
 
 ### Dependency Vulnerability Scan (QG-05b)
 - Voer `npm audit --json` of `pip-audit --format json` uit via SSH
-- **Critical of High vulnerabilities** in directe dependencies → `status: needs-human`
+- **Critical of High vulnerabilities** in directe dependencies → `status: needs-human` (bewaar `previous_status`)
 - **Moderate vulnerabilities** → noteer in output maar blokkeer niet
 - **Low vulnerabilities** → negeer
 
@@ -66,4 +66,4 @@ Body: {
 ```
 
 Als `passed: false`: `status_update` → `"in-progress"` (terug naar Developer Agent)
-Als critical/high vulnerabilities: `status_update` → `"needs-human"`
+Als critical/high vulnerabilities: `status_update` → `"needs-human"`, en voeg `"previous_status": "<huidige_status>"` toe aan JSON.

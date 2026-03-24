@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDLC Pipeline Monitor</title>
+  <meta name="description" content="Real-time voortgangsmonitor voor de SDLC pipeline">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">SDLC Monitor</span>
+        </div>
+        <div class="header-meta">
+          <span id="lock-status" class="lock-badge lock-free">✅ Pipeline vrij</span>
+          <span id="last-updated" class="meta-text">Laden...</span>
+          <button id="refresh-btn" class="btn-refresh" onclick="loadData()">↻ Verversen</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="main">
+      <!-- Statistieken bovenaan -->
+      <section class="stats-grid" id="stats-grid">
+        <div class="stat-card" id="stat-active">
+          <span class="stat-number">—</span>
+          <span class="stat-label">Actief in pipeline</span>
+        </div>
+        <div class="stat-card" id="stat-attention">
+          <span class="stat-number">—</span>
+          <span class="stat-label">Aandacht vereist</span>
+        </div>
+        <div class="stat-card" id="stat-completed-today">
+          <span class="stat-number">—</span>
+          <span class="stat-label">Voltooid vandaag</span>
+        </div>
+        <div class="stat-card" id="stat-cost">
+          <span class="stat-number">—</span>
+          <span class="stat-label">API kosten vandaag</span>
+        </div>
+        <div class="stat-card" id="stat-queue">
+          <span class="stat-number">—</span>
+          <span class="stat-label">In wachtrij</span>
+        </div>
+        <div class="stat-card" id="stat-cycle-time">
+          <span class="stat-number">—</span>
+          <span class="stat-label">Gem. doorlooptijd</span>
+        </div>
+      </section>
+
+      <!-- Aandacht sectie -->
+      <section class="attention-section" id="attention-section" style="display:none">
+        <h2 class="section-title">⚠️ Aandacht vereist</h2>
+        <div id="attention-items" class="attention-grid"></div>
+      </section>
+
+      <!-- Kanban bord -->
+      <section class="kanban-section">
+        <h2 class="section-title">📋 Pipeline Status</h2>
+        <div class="kanban-board" id="kanban-board">
+          <!-- Dynamisch gevuld door app.js -->
+        </div>
+      </section>
+
+      <!-- Per project overzicht -->
+      <section class="projects-section">
+        <h2 class="section-title">📦 Per Project</h2>
+        <div id="projects-grid" class="projects-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // Config — pas aan voor jouw omgeving
+    const CONFIG = {
+      apiUrl: 'https://n8n.7rb.nl/webhook/sdlc-dashboard',
+      dashboardSecret: 'VERVANG_MET_JOUW_SECRET', // zelfde als DASHBOARD_SECRET in n8n
+      refreshInterval: 60000 // 60 seconden auto-refresh
+    };
+  </script>
+  <script src="app.js"></script>
+</body>
+</html>

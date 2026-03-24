@@ -6,7 +6,10 @@
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1,
-      "position": [200, 300],
+      "position": [
+        200,
+        300
+      ],
       "parameters": {
         "rule": {
           "interval": [
@@ -22,7 +25,10 @@
       "name": "GET LOCK.json",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [400, 300],
+      "position": [
+        400,
+        300
+      ],
       "parameters": {
         "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
         "authentication": "genericCredentialType",
@@ -41,7 +47,10 @@
       "name": "Is locked?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [600, 300],
+      "position": [
+        600,
+        300
+      ],
       "parameters": {
         "jsCode": "const content = Buffer.from($input.first().json.content, 'base64').toString('utf8');\nconst data = JSON.parse(content);\nreturn [{ json: { locked: data.locked } }];"
       }
@@ -51,7 +60,10 @@
       "name": "IF locked",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [800, 300],
+      "position": [
+        800,
+        300
+      ],
       "parameters": {
         "conditions": {
           "boolean": [
@@ -68,7 +80,10 @@
       "name": "GET QUEUE.json",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1000, 400],
+      "position": [
+        1000,
+        400
+      ],
       "parameters": {
         "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
         "authentication": "genericCredentialType",
@@ -87,7 +102,10 @@
       "name": "Pop item from queue",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1200, 400],
+      "position": [
+        1200,
+        400
+      ],
       "parameters": {
         "jsCode": "const file = $input.first().json;\nconst queue = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\n\nif (!queue.queue || queue.queue.length === 0) {\n  return [{ json: { empty: true } }];\n}\n\nconst item = queue.queue.shift();\nqueue.last_updated = new Date().toISOString();\n\nreturn [{\n  json: {\n    empty: false,\n    next_item: item,\n    remaining_queue: queue,\n    queue_sha: file.sha,\n    updated_queue_content: Buffer.from(JSON.stringify(queue, null, 2)).toString('base64')\n  }\n}];"
       }
@@ -97,7 +115,10 @@
       "name": "IF queue empty",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [1400, 400],
+      "position": [
+        1400,
+        400
+      ],
       "parameters": {
         "conditions": {
           "boolean": [
@@ -114,7 +135,10 @@
       "name": "GET item frontmatter",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1600, 500],
+      "position": [
+        1600,
+        500
+      ],
       "parameters": {
         "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.next_item.file_path }}",
         "authentication": "genericCredentialType",
@@ -133,7 +157,10 @@
       "name": "Check status changed?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1800, 500],
+      "position": [
+        1800,
+        500
+      ],
       "parameters": {
         "jsCode": "const file = $input.first().json;\nconst content = Buffer.from(file.content, 'base64').toString('utf8');\nconst popData = $('Pop item from queue').first().json;\n\n// Very simple yaml parsing for status\nconst match = content.match(/status:\\s*([^\\n]+)/);\nlet currentStatus = '';\nif (match) currentStatus = match[1].trim();\n\nconst changed = (currentStatus !== popData.next_item.status);\n\nreturn [{ json: { changed: changed, popData: popData } }];"
       }
@@ -143,7 +170,10 @@
       "name": "IF status changed",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [2000, 500],
+      "position": [
+        2000,
+        500
+      ],
       "parameters": {
         "conditions": {
           "boolean": [
@@ -160,7 +190,10 @@
       "name": "PUT QUEUE (item skipped)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2200, 400],
+      "position": [
+        2200,
+        400
+      ],
       "parameters": {
         "method": "PUT",
         "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
@@ -168,8 +201,28 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"message\": \"chore(queue): remove processed item {{ $('Pop item from queue').first().json.next_item.item_id }} [sdlc-skip]\", \"content\": \"{{ $('Pop item from queue').first().json.updated_queue_content }}\", \"sha\": \"{{ $('Pop item from queue').first().json.queue_sha }}\" }",
-        "options": {}
+        "jsonBody": "={ \"message\": \"chore(queue): remove processed item {{ $('Pop item from queue').first().json.next_item.item_id }}\", \"content\": \"{{ $('Pop item from queue').first().json.updated_queue_content }}\", \"sha\": \"{{ $('Pop item from queue').first().json.queue_sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -183,7 +236,10 @@
       "name": "Acquire Lock",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [2200, 600],
+      "position": [
+        2200,
+        600
+      ],
       "parameters": {
         "workflowId": "SDLC Lock Manager",
         "workflowInputs": {
@@ -201,7 +257,10 @@
       "name": "IF acquired",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [2400, 600],
+      "position": [
+        2400,
+        600
+      ],
       "parameters": {
         "conditions": {
           "boolean": [
@@ -218,7 +277,10 @@
       "name": "PUT QUEUE (success)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2600, 700],
+      "position": [
+        2600,
+        700
+      ],
       "parameters": {
         "method": "PUT",
         "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
@@ -226,8 +288,28 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"message\": \"chore(queue): remove started item {{ $('Pop item from queue').first().json.next_item.item_id }} [sdlc-skip]\", \"content\": \"{{ $('Pop item from queue').first().json.updated_queue_content }}\", \"sha\": \"{{ $('Pop item from queue').first().json.queue_sha }}\" }",
-        "options": {}
+        "jsonBody": "={ \"message\": \"chore(queue): remove started item {{ $('Pop item from queue').first().json.next_item.item_id }}\", \"content\": \"{{ $('Pop item from queue').first().json.updated_queue_content }}\", \"sha\": \"{{ $('Pop item from queue').first().json.queue_sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -241,7 +323,10 @@
       "name": "Prepare SDLC Router Auth",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2800, 700],
+      "position": [
+        2800,
+        700
+      ],
       "parameters": {
         "jsCode": "const crypto = require('crypto');\nconst popData = $('Pop item from queue').first().json;\nconst body = { \n  \"ref\": \"refs/heads/main\", \n  \"commits\": [ \n    { \n      \"id\": popData.next_item.commit_sha || \"\", \n      \"modified\": [popData.next_item.file_path] \n    } \n  ] \n};\nconst signature = 'sha256=' + crypto.createHmac('sha256', $env.N8N_SECRET).update(JSON.stringify(body)).digest('hex');\nreturn [{ json: { body: body, signature: signature, popData: popData } }];"
       }
@@ -251,7 +336,10 @@
       "name": "SDLC Router Trigger",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [3000, 700],
+      "position": [
+        3000,
+        700
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.N8N_BASE_URL }}/webhook/sdlc-router",
@@ -275,96 +363,197 @@
       "name": "Telegram: Started",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [3200, 700],
+      "position": [
+        3200,
+        700
+      ],
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=▶️ Queue: {{ $json.popData.next_item.item_id }} opgepakt ({{ $json.popData.remaining_queue.queue.length }} items resterend)"
+        "text": "=\u25b6\ufe0f Queue: {{ $json.popData.next_item.item_id }} opgepakt ({{ $json.popData.remaining_queue.queue.length }} items resterend)"
       }
     }
   ],
   "connections": {
     "Schedule Trigger": {
       "main": [
-        [{"node": "GET LOCK.json", "type": "main", "index": 0}]
+        [
+          {
+            "node": "GET LOCK.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "GET LOCK.json": {
       "main": [
-        [{"node": "Is locked?", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Is locked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Is locked?": {
       "main": [
-        [{"node": "IF locked", "type": "main", "index": 0}]
+        [
+          {
+            "node": "IF locked",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "IF locked": {
       "main": [
         [],
-        [{"node": "GET QUEUE.json", "type": "main", "index": 0}]
+        [
+          {
+            "node": "GET QUEUE.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "GET QUEUE.json": {
       "main": [
-        [{"node": "Pop item from queue", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Pop item from queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Pop item from queue": {
       "main": [
-        [{"node": "IF queue empty", "type": "main", "index": 0}]
+        [
+          {
+            "node": "IF queue empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "IF queue empty": {
       "main": [
         [],
-        [{"node": "GET item frontmatter", "type": "main", "index": 0}]
+        [
+          {
+            "node": "GET item frontmatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "GET item frontmatter": {
       "main": [
-        [{"node": "Check status changed?", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Check status changed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Check status changed?": {
       "main": [
-        [{"node": "IF status changed", "type": "main", "index": 0}]
+        [
+          {
+            "node": "IF status changed",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "IF status changed": {
       "main": [
-        [{"node": "PUT QUEUE (item skipped)", "type": "main", "index": 0}],
-        [{"node": "Acquire Lock", "type": "main", "index": 0}]
+        [
+          {
+            "node": "PUT QUEUE (item skipped)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Acquire Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Acquire Lock": {
       "main": [
-        [{"node": "IF acquired", "type": "main", "index": 0}]
+        [
+          {
+            "node": "IF acquired",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "IF acquired": {
       "main": [
-        [{"node": "PUT QUEUE (success)", "type": "main", "index": 0}],
+        [
+          {
+            "node": "PUT QUEUE (success)",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
       ]
     },
     "PUT QUEUE (success)": {
       "main": [
-        [{"node": "Prepare SDLC Router Auth", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Prepare SDLC Router Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Prepare SDLC Router Auth": {
       "main": [
-        [{"node": "SDLC Router Trigger", "type": "main", "index": 0}]
+        [
+          {
+            "node": "SDLC Router Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "SDLC Router Trigger": {
       "main": [
-        [{"node": "Telegram: Started", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Telegram: Started",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
   "settings": {
     "executionOrder": "v1"
   },
-  "tags": ["sdlc"]
+  "tags": [
+    "sdlc"
+  ]
 }

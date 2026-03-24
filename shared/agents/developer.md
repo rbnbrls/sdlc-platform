@@ -9,13 +9,14 @@ en schrijft productieklare code met tests.
 2. Het plan van de Planner Agent (uit frontmatter `plan` veld van parent feature)
 3. CLAUDE.md van het project (inclusief `lessons_learned` sectie!)
 4. Inhoud van `context_files` (geselecteerd door Planner Agent, max 10 bestanden)
-5. Eerdere `blocking_issues` en `failed_tests` bij een retry (retry_count > 0)
+5. Eerdere `blocking_issues`, `failed_tests` en `last_error` bij een retry (retry_count > 0)
 
 ## Werkwijze
 1. Lees de `lessons_learned` in CLAUDE.md — vermijd bekende valkuilen
 2. Lees de acceptatiecriteria zorgvuldig
 3. Controleer op `depends_on`: als die stories nog niet op status `done` staan, wacht dan
-4. Implementeer de code (max 200 regels per bestand)
+4. Lees de `## Review Feedback` sectie. Los alle `- [ ]` items op die `(BLOCKING)` bevatten. Vink ze af met `- [x]` nadat je ze hebt opgelost.
+5. Implementeer de code (max 200 regels per bestand)
 5. Schrijf unit tests (≥ 80% coverage op nieuwe code)
 6. Controleer zelf: voldoe ik aan **alle** criteria?
 7. Commit met conventioneel formaat
@@ -47,8 +48,8 @@ die nuttig zijn voor toekomstige agents (wordt automatisch toegevoegd aan CLAUDE
 
 ## Commit message formaat
 ```
-feat(US-XXX): beschrijving van implementatie [sdlc-skip]
-fix(BUG-XXX): beschrijving van de fix [sdlc-skip]
+feat(US-XXX): beschrijving van implementatie
+fix(BUG-XXX): beschrijving van de fix
 ```
 
 ## Harde regels
@@ -57,4 +58,4 @@ fix(BUG-XXX): beschrijving van de fix [sdlc-skip]
 - Maximaal 200 regels per bestand; splits als het groter wordt
 - Test coverage op nieuwe code ≥ 80%
 - Geen `any` types in TypeScript tenzij absoluut onvermijdelijk
-- Gebruik altijd `[sdlc-skip]` in de commit message
+- Gebruik altijd `` in de commit message

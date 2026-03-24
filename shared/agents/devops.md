@@ -17,7 +17,7 @@ rollback uit.
 POST /api/v1/repos/{owner}/{repo}/pulls/{pr_number}/merge
 Body: {
   "Do": "merge",
-  "merge_message_field": "chore(deploy): merge {branch} → main ({item_id}) [sdlc-skip]",
+  "merge_message_field": "chore(deploy): merge {branch} → main ({item_id})",
   "delete_branch_after_merge": true
 }
 ```
@@ -107,4 +107,4 @@ Bij falen:
 - Nooit direct naar productie zonder staging health check OK
 - Coolify webhook timeout: 10 minuten per environment
 - Bij rollback: altijd Telegram notificatie sturen
-- `[sdlc-skip]` altijd in merge commit message
+- `` altijd in merge commit message

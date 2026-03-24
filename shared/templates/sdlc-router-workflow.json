@@ -39,7 +39,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// Split pipe-separated files and fetch each via Gitea API\n// Parse YAML frontmatter from each file\n// Return items with parsed status, type, project, id\nconst items = $input.first().json;\nconst files = items.files.split('|');\nconst results = [];\nfor (const file of files) {\n  results.push({ json: { filePath: file.trim(), status: 'new' } });\n}\nreturn results;"
+        "jsCode": "// Split pipe-separated files and fetch each via Gitea API\n// Parse YAML frontmatter from each file\n// Return items with parsed status, type, project, id\nconst body = $input.first().json.body || $input.first().json;\nconst filesStr = body.files || \"\";\nconst files = filesStr.split(\"|\").filter(Boolean);\n\nconst results = [];\nfor (const filePath of files) {\n  try {\n    results.push({ \n      json: { \n        filePath: filePath.trim(),\n        commit_sha: body.commit_sha,\n        pusher: body.pusher,\n        status: \"new\",\n        error: null\n      } \n    });\n  } catch (err) {\n    // Log het probleem maar stop de rest niet\n    results.push({ \n      json: { \n        filePath: filePath.trim(),\n        error: err.message,\n        skip_parse: true\n      } \n    });\n  }\n}\nreturn results;"
       }
     },
     {
@@ -388,8 +388,28 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"message\": \"chore(queue): enqueue {{ $json.item_id }} [sdlc-skip]\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
-        "options": {}
+        "jsonBody": "={ \"message\": \"chore(queue): enqueue {{ $json.item_id }}\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
       },
       "credentials": {
         "httpHeaderAuth": {
@@ -410,6 +430,40 @@
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
         "text": "=\u23f3 {{ $('Parse + append item').first().json.item_id }} in wachtrij geplaatst (pipeline bezet door {{ $('Parse + append item').first().json.locked_by }})"
+      }
+    },
+    {
+      "id": "if_parse_skip",
+      "name": "If Parse Skip",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        675,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.skip_parse }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "telegram_parse_skip",
+      "name": "Telegram: Parse Skip",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        675,
+        500
+      ],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=\u26a0\ufe0f Parse fout voor item: {{ $json.filePath }}\nFout: {{ $json.error }}"
       }
     }
   ],
@@ -440,7 +494,7 @@
       "main": [
         [
           {
-            "node": "Deduplication Check",
+            "node": "If Parse Skip",
             "type": "main",
             "index": 0
           }
@@ -619,6 +673,24 @@
         [
           {
             "node": "Telegram: Queue Placed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Parse Skip": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Parse Skip",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Deduplication Check",
             "type": "main",
             "index": 0
           }

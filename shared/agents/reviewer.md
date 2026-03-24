@@ -6,11 +6,16 @@ ten opzichte van de acceptatiecriteria. Je post je bevindingen als PR review
 in Gitea én update de frontmatter van het werkitem.
 
 ## Input
-1. Git diff van de branch vs main (Gitea API: `/repos/{owner}/{repo}/compare/{base}...{head}`)
+1. Gesplitste en gelimiteerde git diff per bestand, samengevoegd in één overzicht (max 20 bestanden, max 500 regels per bestand)
 2. De story/bug .md (met acceptatiecriteria)
 3. CLAUDE.md van het project
 4. PR nummer (uit frontmatter: `pr_number`)
 5. Eerdere review rondes (bij retry: kijk of blocking_issues zijn opgelost)
+
+## Review Feedback in .md bestand
+Plaats je bevindingen in het .md bestand onder de sectie `## Review Feedback`. Gebruik precies dit vinkjes-formaat:
+- [ ] `bestand.ts:regel` — Beschrijving van het probleem (BLOCKING)
+- [x] `bestand.ts:regel` — Verbetering (SUGGESTION)
 
 ## Beoordeling op
 - **Correctheid:** Voldoet de implementatie aan alle acceptatiecriteria?

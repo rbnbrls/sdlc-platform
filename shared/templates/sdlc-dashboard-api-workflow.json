@@ -1,0 +1,325 @@
+{
+  "name": "SDLC Dashboard API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sdlc-dashboard",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://dashboard.7rb.nl"
+              }
+            ]
+          }
+        },
+        "responseMode": "lastNode"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const secret = $input.first().json.headers['x-dashboard-secret'];\nif (secret !== $env.DASHBOARD_SECRET) {\n  return [{ json: { error: 'Unauthorized' } }];\n}\nreturn [{ json: { authenticated: true } }];"
+      },
+      "id": "validate-secret",
+      "name": "Valideer secret",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/branches/main",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-branch",
+      "name": "Haal branch op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        400,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/git/trees/{{ $json.commit.id }}?recursive=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-tree",
+      "name": "Haal tree op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        600,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $json.tree;\nreturn items.filter(i => i.path.match(/^projects\\/[^\\/]+\\/backlog\\/.*\\.md$/)).map(i => ({ json: i }));"
+      },
+      "id": "filter-files",
+      "name": "Filter backlog bestanden",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-content",
+      "name": "Haal content op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1200,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $input.all();\nconst items = [];\n\nfiles.forEach(f => {\n  const file = f.json;\n  if (!file.content) return;\n  \n  const content = Buffer.from(file.content, 'base64').toString('utf8');\n  const fmMatch = content.match(/^---\\n([\\s\\S]+?)\\n---/);\n  if (!fmMatch) return;\n  \n  const fm = {};\n  fmMatch[1].split('\\n').forEach(line => {\n    const colonIdx = line.indexOf(':');\n    if (colonIdx === -1) return;\n    const key = line.slice(0, colonIdx).trim();\n    const val = line.slice(colonIdx + 1).trim().replace(/^\"(.*)\"$/, '$1');\n    fm[key] = val;\n  });\n  \n  items.push({\n    id: fm.id,\n    type: fm.type,\n    project: fm.project,\n    title: fm.title,\n    status: fm.status,\n    priority: fm.priority,\n    created: fm.created,\n    processing_started: fm.processing_started || null,\n    processing_updated: fm.processing_updated || null,\n    current_agent: fm.current_agent || null,\n    retry_count: parseInt(fm.retry_count) || 0,\n    last_error: fm.last_error || null,\n    api_cost_usd: parseFloat(fm.api_cost_usd) || 0,\n    deployed_at: fm.deployed_at || null,\n    file_path: file.path || file.url?.split('/contents/')[1]\n  });\n});\n\nreturn [{ json: { items, generated_at: new Date().toISOString() } }];"
+      },
+      "id": "parse-frontmatters",
+      "name": "Parse Frontmatters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-lock",
+      "name": "Haal LOCK op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1600,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-queue",
+      "name": "Haal QUEUE op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1800,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const itemsObj = $('Parse Frontmatters').all();\nconst lockRaw = $('Haal LOCK op').first().json;\nconst queueRaw = $('Haal QUEUE op').first().json;\n\n// We need to decode the content\nconst getJson = (file) => {\n  if(!file || !file.content) return {};\n  try { \n      return JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\n  } catch (e) {\n      return {};\n  }\n};\n\nconst items = itemsObj[0].json.items;\nconst lock = getJson(lockRaw);\nconst queue = getJson(queueRaw);\nconst now = new Date();\n\n// Statistieken\nconst STALE_MS = 30 * 60 * 1000;\nconst TERMINAL = ['documented', 'needs-human', 'deploy-failed'];\n\nconst stats = {\n  total: items.length,\n  by_status: {},\n  by_project: {},\n  needs_attention: [],\n  throughput: {\n    completed_today: 0,\n    completed_this_week: 0,\n    avg_cycle_time_hours: 0\n  },\n  costs: {\n    total: 0,\n    today: 0\n  }\n};\n\nconst today = now.toISOString().split('T')[0];\nlet cycleTimes = [];\n\nitems.forEach(item => {\n  // Status verdeling\n  stats.by_status[item.status] = (stats.by_status[item.status] || 0) + 1;\n  \n  // Project verdeling\n  if (!stats.by_project[item.project]) {\n    stats.by_project[item.project] = { total: 0, active: 0, completed: 0 };\n  }\n  stats.by_project[item.project].total++;\n  \n  if (item.status === 'documented') {\n    stats.by_project[item.project].completed++;\n    if (item.processing_updated?.startsWith(today)) {\n      stats.throughput.completed_today++;\n    }\n    if (item.processing_started && item.processing_updated) {\n      const cycleMs = new Date(item.processing_updated) - new Date(item.processing_started);\n      cycleTimes.push(cycleMs / 3600000); // omzetten naar uren\n    }\n  } else if (!['new'].includes(item.status)) {\n    stats.by_project[item.project].active++;\n  }\n  \n  // Aandacht\n  const attention = [];\n  if (item.status === 'needs-human') attention.push({ type: 'needs_human', msg: item.last_error });\n  if (item.retry_count >= 2) attention.push({ type: 'high_retry', msg: `${item.retry_count}x retry` });\n  if (!TERMINAL.includes(item.status) && item.status !== 'new' && item.processing_updated) {\n    const ageMs = now - new Date(item.processing_updated);\n    if (ageMs > STALE_MS) {\n      attention.push({ type: 'stale', msg: `${Math.round(ageMs / 60000)} min geen activiteit` });\n    }\n  }\n  if (attention.length > 0) {\n    stats.needs_attention.push({ ...item, attention });\n  }\n  \n  // Kosten\n  stats.costs.total += item.api_cost_usd;\n  if (item.processing_updated?.startsWith(today)) {\n    stats.costs.today += item.api_cost_usd;\n  }\n});\n\n// Gemiddelde doorlooptijd\nif (cycleTimes.length > 0) {\n  stats.throughput.avg_cycle_time_hours = Math.round(\n    cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length * 10\n  ) / 10;\n}\n\n// Rond kosten af\nstats.costs.total = Math.round(stats.costs.total * 10000) / 10000;\nstats.costs.today = Math.round(stats.costs.today * 10000) / 10000;\n\nreturn [{\n  json: {\n    items,\n    stats,\n    lock,\n    queue: queue.queue || [],\n    generated_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "aggregate",
+      "name": "Aggregeer en respond",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valideer secret",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valideer secret": {
+      "main": [
+        [
+          {
+            "node": "Haal branch op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal branch op": {
+      "main": [
+        [
+          {
+            "node": "Haal tree op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal tree op": {
+      "main": [
+        [
+          {
+            "node": "Filter backlog bestanden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter backlog bestanden": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Haal content op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal content op": {
+      "main": [
+        [
+          {
+            "node": "Parse Frontmatters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Frontmatters": {
+      "main": [
+        [
+          {
+            "node": "Haal LOCK op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal LOCK op": {
+      "main": [
+        [
+          {
+            "node": "Haal QUEUE op",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Haal QUEUE op": {
+      "main": [
+        [
+          {
+            "node": "Aggregeer en respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "dashboard"
+  ]
+}

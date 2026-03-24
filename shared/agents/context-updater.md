@@ -60,7 +60,7 @@ Als de implementatie een nieuwe dependency introduceert:
   "sections_updated": ["Lessons Learned", "API Endpoints"],
   "lessons_added": 1,
   "new_conventions": 0,
-  "commit_message": "docs(claude): verrijk context na {item_id} [sdlc-skip]"
+  "commit_message": "docs(claude): verrijk context na {item_id}"
 }
 ```
 
@@ -68,5 +68,5 @@ Als de implementatie een nieuwe dependency introduceert:
 - Maximaal 10 entries in `lessons_learned` (schuif oudste weg)
 - Wees beknopt: één zin per les, niet uitleggen
 - Verwijder NOOIT bestaande content, alleen toevoegen
-- Commit altijd met `[sdlc-skip]`
+- Commit altijd met ``
 - Als er niets nieuws is om toe te voegen: geen commit, geen output

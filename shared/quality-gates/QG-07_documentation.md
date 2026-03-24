@@ -22,11 +22,11 @@
 - **Issue:** sectie `## Recente wijzigingen` bevat de verbetering
 
 ### Commits
-- Er is een commit aanwezig met `[sdlc-skip]` in de message
+- Er is een commit aanwezig met `` in de message
 - De commit raakt uitsluitend bestanden in `projects/{project}/docs/`
 
 ## Bij falen
 - Retry Documenter Agent met de gefaalde criteria als extra context
 - Maximum retry_count: 2
-- Bij retry_count ≥ 2: zet status op `needs-human`, stuur notificatie
+- Bij retry_count ≥ 2: zet status op `needs-human` (en bewaar de huidige status in `previous_status`), stuur notificatie
   "⚠️ Documentatie incompleet na {id}: {gefaalde criteria}"

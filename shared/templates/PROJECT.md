@@ -9,23 +9,27 @@
 
 ---
 
-## Overzicht
-
+## Beschrijving
+<!-- SECTION:description -->
 {Korte beschrijving van het project: wat het doet, voor wie, en waarom het bestaat.}
 
 - **Status:** actief in ontwikkeling / stabiel / gearchiveerd
 - **Versie:** {versienummer of "zie CHANGELOG.md"}
 - **Gedeployed op:** {URL of "n.v.t."}
 - **Tech stack:** {bijv. Next.js 14, TypeScript, PostgreSQL}
+<!-- /SECTION:description -->
 
 ---
 
-## Functionaliteiten
+## Actieve Features
+<!-- SECTION:features -->
+<!-- Automatisch bijgehouden door Documenter Agent -->
 
 > Wat het systeem nu *kan*. Schrijf gebruikersgericht.
 
 - {Functionaliteit 1}: {Beschrijving}
 - {Functionaliteit 2}: {Beschrijving}
+<!-- /SECTION:features -->
 
 ---
 
@@ -61,8 +65,8 @@
 
 ---
 
-## Bekende issues
-
+## Bekende Issues
+<!-- SECTION:known-issues -->
 ### Open
 | ID | Beschrijving | Priority |
 |----|-------------|---------|
@@ -72,14 +76,25 @@
 | ID | Beschrijving | Opgelost op |
 |----|-------------|------------|
 | BUG-XXX | {Beschrijving} | {YYYY-MM-DD} |
+<!-- /SECTION:known-issues -->
 
 ---
 
-## Recente wijzigingen
-
+## Changelog Samenvatting
+<!-- SECTION:changelog -->
 | Datum | ID | Wijziging |
 |-------|----|-----------|
 | {YYYY-MM-DD} | {ID} | {Korte beschrijving} |
+<!-- /SECTION:changelog -->
+
+---
+
+## Technische Beslissingen
+<!-- SECTION:decisions -->
+<!-- Handmatig bijgehouden -->
+
+- {Datum} - {Onderwerp}: {Besluit en korte motivatie}
+<!-- /SECTION:decisions -->
 
 ---
 

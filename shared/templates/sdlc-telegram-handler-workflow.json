@@ -1,0 +1,242 @@
+{
+  "name": "SDLC Telegram Handler",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "telegram-handler",
+        "responseMode": "onReceived"
+      }
+    },
+    {
+      "id": "parse",
+      "name": "Parse Telegram update",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const update = $input.first().json;\n\nif (!update.callback_query) {\n  return [{ json: { skip: true } }];\n}\n\nconst callbackQuery = update.callback_query;\nconst [action, itemId, ...pathParts] = callbackQuery.data.split(':');\nconst filePath = pathParts.join(':');\n\nreturn [{\n  json: {\n    action,\n    item_id: itemId,\n    file_path: filePath,\n    callback_query_id: callbackQuery.id,\n    from_user: callbackQuery.from.username || callbackQuery.from.first_name,\n    message_id: callbackQuery.message.message_id,\n    chat_id: callbackQuery.message.chat.id\n  }\n}];"
+      }
+    },
+    {
+      "id": "answer",
+      "name": "Beantwoord callback query",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        400,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/answerCallbackQuery",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"callback_query_id\": \"{{ $json.callback_query_id }}\",\n  \"text\": \"Actie ontvangen...\"\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "switch",
+      "name": "Switch op actie",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value2": "approve",
+              "output": 0
+            },
+            {
+              "operation": "equal",
+              "value2": "reject",
+              "output": 1
+            },
+            {
+              "operation": "equal",
+              "value2": "restart",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 3
+      }
+    },
+    {
+      "id": "approve",
+      "name": "Approve-flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        -200
+      ],
+      "parameters": {
+        "jsCode": "const updates = {\n  status: 'triaged',\n  last_error: '',\n  processing_updated: new Date().toISOString(),\n  current_agent: ''\n};\nreturn [{ json: { ...$input.first().json, updates, msg: `✅ ${$input.first().json.item_id} goedgekeurd door ${$input.first().json.from_user}. Item hervat.` } }];"
+      }
+    },
+    {
+      "id": "reject",
+      "name": "Reject-flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        0
+      ],
+      "parameters": {
+        "jsCode": "const updates = {\n  status: 'needs-human',\n  last_error: `Afgewezen door ${$input.first().json.from_user} via Telegram`,\n  processing_updated: new Date().toISOString()\n};\nreturn [{ json: { ...$input.first().json, updates, msg: `❌ ${$input.first().json.item_id} afgewezen door ${$input.first().json.from_user}. Status blijft needs-human.` } }];"
+      }
+    },
+    {
+      "id": "restart",
+      "name": "Restart-flow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const updates = {\n  status: 'planned',\n  retry_count: 0,\n  last_error: `Handmatig herstart door ${$input.first().json.from_user}`,\n  processing_updated: new Date().toISOString(),\n  current_agent: ''\n};\nreturn [{ json: { ...$input.first().json, updates, msg: `🔄 ${$input.first().json.item_id} herstart door ${$input.first().json.from_user}. Item staat in de wachtrij.` } }];"
+      }
+    },
+    {
+      "id": "confirm",
+      "name": "Telegram Bevestiging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.chat_id }}\",\n  \"text\": \"{{ $json.msg }}\",\n  \"reply_to_message_id\": \"{{ $json.message_id }}\"\n}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Telegram update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Telegram update": {
+      "main": [
+        [
+          {
+            "node": "Beantwoord callback query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Beantwoord callback query": {
+      "main": [
+        [
+          {
+            "node": "Switch op actie",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch op actie": {
+      "main": [
+        [
+          {
+            "node": "Approve-flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject-flow",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Restart-flow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approve-flow": {
+      "main": [
+        [
+          {
+            "node": "Telegram Bevestiging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reject-flow": {
+      "main": [
+        [
+          {
+            "node": "Telegram Bevestiging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Restart-flow": {
+      "main": [
+        [
+          {
+            "node": "Telegram Bevestiging",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "telegram"
+  ]
+}

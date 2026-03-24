@@ -34,6 +34,6 @@
 - Story-tekst ("Als ... wil ik ... zodat ...") aanwezig
 
 ## Bij falen
-- Zet `status: needs-human`
+- Zet `status: needs-human` (en bewaar de huidige status in `previous_status`)
 - Telegram: "⚠️ QG-01 falen: {id} — ontbrekende velden: {velden}"
 - Geen verdere verwerking

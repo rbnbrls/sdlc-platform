@@ -18,5 +18,5 @@
 - Voor epics: `features` lijst aanwezig (mag leeg zijn bij klein epic)
 
 ## Bij falen
-- Zet `status: needs-human`
+- Zet `status: needs-human` (en bewaar de huidige status in `previous_status`)
 - Telegram: "⚠️ QG-02 falen: {id} — triage onvolledig: {reden}"

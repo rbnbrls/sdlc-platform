@@ -1,0 +1,464 @@
+{
+  "name": "SDLC Watchdog",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_main_branch",
+      "name": "GET Main Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/branches/main",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "get_tree",
+      "name": "GET Tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        600,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/git/trees/{{ $json.commit.id }}?recursive=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "filter_files",
+      "name": "Filter Backlog Files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const tree = $input.first().json.tree;\n// Filter: alleen .md bestanden in backlog mappen\nconst backlogFiles = tree.filter(f => \n  f.type === 'blob' && \n  f.path.match(/^projects\\/.+\\/backlog\\/.+\\.md$/)\n);\nreturn backlogFiles.map(f => ({ json: { path: f.path } }));"
+      }
+    },
+    {
+      "id": "split_in_batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1000,
+        300
+      ],
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      }
+    },
+    {
+      "id": "get_file",
+      "name": "GET File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "parse_stale",
+      "name": "Detect Stale Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minuten\nconst TERMINAL_STATUSES = ['new', 'documented', 'needs-human', 'deploy-failed'];\nconst now = new Date();\nconst today = now.toISOString().split('T')[0];\nconst yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];\n\nlet totalCostAllTime = 0;\nlet totalCostToday = 0;\nlet totalCostYesterday = 0;\nconst costByProject = {};\nconst activeItems = [];\n\nconst stale_items = $input.all().map(item => {\n  const file = item.json;\n  const content = Buffer.from(file.content, 'base64').toString('utf8');\n  \n  // Simpele frontmatter parser\n  const frontmatterMatch = content.match(/^---\\n([\\s\\S]+?)\\n---/);\n  if (!frontmatterMatch) return null;\n  \n  const fm = {};\n  frontmatterMatch[1].split('\\n').forEach(line => {\n    const [key, ...vals] = line.split(':');\n    if (key) fm[key.trim()] = vals.join(':').trim().replace(/^\"(.*)\"$/, '$1');\n  });\n\n  // Track Costs\n  const cost = parseFloat(fm.api_cost_usd) || 0;\n  totalCostAllTime += cost;\n  if (!costByProject[fm.project]) costByProject[fm.project] = 0;\n  costByProject[fm.project] += cost;\n  \n  if (fm.processing_updated?.startsWith(today)) {\n    totalCostToday += cost;\n  }\n  if (fm.processing_updated?.startsWith(yesterday)) {\n    totalCostYesterday += cost;\n  }\n\n  // Skip terminale statussen voor stale check\n  if (TERMINAL_STATUSES.includes(fm.status)) return null;\n\n  activeItems.push({\n    id: fm.id,\n    project: fm.project,\n    status: fm.status,\n    api_cost_usd: cost\n  });\n  \n  // Check stale op basis van processing_updated of processing_started\n  const lastUpdate = fm.processing_updated \n    ? new Date(fm.processing_updated) \n    : (fm.processing_started ? new Date(fm.processing_started) : null);\n  \n  if (!lastUpdate) return null; // Nog nooit verwerkt\n  \n  const ageMs = now - lastUpdate;\n  const isStale = ageMs > STALE_THRESHOLD_MS;\n  \n  if (!isStale) return null;\n  \n  return {\n    item_id: fm.id,\n    status: fm.status,\n    current_agent: fm.current_agent || 'unknown',\n    project: fm.project,\n    processing_updated: fm.processing_updated,\n    age_minutes: Math.round(ageMs / 1000 / 60),\n    file_path: file.url ? file.url.split('/contents/')[1] : null\n  };\n}).filter(Boolean);\n\nconst topExpensiveActive = activeItems\n  .sort((a, b) => b.api_cost_usd - a.api_cost_usd)\n  .slice(0, 5);\n\nreturn [{ \n  json: { \n    stale_items, \n    count: stale_items.length,\n    costs: {\n      total_all_time: Math.round(totalCostAllTime * 10000) / 10000,\n      total_today: Math.round(totalCostToday * 10000) / 10000,\n      total_yesterday: Math.round(totalCostYesterday * 10000) / 10000,\n      by_project: costByProject,\n      top_expensive_active: topExpensiveActive\n    }\n  } \n}];"
+      }
+    },
+    {
+      "id": "if_stale",
+      "name": "Any stale items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.count > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_lock",
+      "name": "GET LOCK.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1800,
+        200
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "check_lock",
+      "name": "Check Lock",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        200
+      ],
+      "parameters": {
+        "jsCode": "const lock = JSON.parse(Buffer.from($input.first().json.content, 'base64').toString('utf8'));\nconst staleItems = $('Detect Stale Items').first().json.stale_items;\nconst staleIds = staleItems.map(i => i.item_id);\n\nconst lockHeldByStale = lock.locked && staleIds.includes(lock.locked_by);\n\nreturn [{\n  json: {\n    lock,\n    lock_sha: $input.first().json.sha,\n    lockHeldByStale,\n    stale_items: staleItems,\n    costs: $('Detect Stale Items').first().json.costs\n  }\n}];"
+      }
+    },
+    {
+      "id": "if_lock_held",
+      "name": "Lock held by stale?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2200,
+        200
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.lockHeldByStale }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "prep_release",
+      "name": "Prepare Lock Release",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        100
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst emptyLock = {\n  locked: false,\n  locked_by: \"\",\n  locked_at: \"\",\n  pipeline_step: \"\",\n  execution_id: \"\"\n};\nreturn [{\n  json: {\n    content: Buffer.from(JSON.stringify(emptyLock, null, 2)).toString('base64'),\n    sha: input.lock_sha,\n    released_from: input.lock.locked_by\n  }\n}];"
+      }
+    },
+    {
+      "id": "release_lock",
+      "name": "PUT LOCK.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2600,
+        100
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore(lock): released by watchdog (was held by stale item {{ $json.released_from }})\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "telegram_report",
+      "name": "Telegram Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2800,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const items = $('Check Lock').first().json.stale_items;\nconst lockReleased = $('Check Lock').first().json.lockHeldByStale;\nconst costs = $('Check Lock').first().json.costs;\n\nlet message = \"⚠️ *SDLC Watchdog Rapport*\\n\";\nmessage += `${new Date().toLocaleString('nl-NL', { timeZone: 'Europe/Amsterdam' })}\\n\\n`;\n\nif (items.length > 0) {\n  message += \"*Stale items (> 30 min geen activiteit):*\\n\\n\";\n  items.forEach(item => {\n    message += `• \\`${item.item_id}\\` — status: ${item.status}\\n`;\n    message += `  Agent: ${item.current_agent} | Project: ${item.project}\\n`;\n    message += `  Vastgelopen: ${item.age_minutes} minuten geleden\\n`;\n    message += `  [🔄 Herstart](${$env.N8N_BASE_URL}/webhook/sdlc-restart?item_id=${item.item_id}&file_path=${encodeURIComponent(item.file_path)})\\n\\n`;\n  });\n  if (lockReleased) {\n    message += `🔓 Lock vrijgegeven (was bezet door \\`${items.find(i => i).item_id}\\`)\\n\\n`;\n  }\n} else {\n  message += \"✅ Geen vastgelopen items gedetecteerd.\\n\\n\";\n}\n\nmessage += \"💰 *API Kosten Status*\\n\";\nmessage += `- Vandaag: $${costs.total_today}\\n`;\nmessage += `- Totaal: $${costs.total_all_time}\\n\\n`;\nmessage += \"*Top 3 duurste actieve items:*\\n\";\ncosts.top_expensive_active.slice(0, 3).forEach(i => {\n  message += `- ${i.id} ($${i.api_cost_usd}) [` + i.status + `]\\n`;\n});\n\nreturn [{ json: { text: message } }];"
+      }
+    },
+    {
+      "id": "send_telegram",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        3000,
+        300
+      ],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.text }}",
+        "parseMode": "Markdown"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "GET Main Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Main Branch": {
+      "main": [
+        [
+          {
+            "node": "GET Tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET Tree": {
+      "main": [
+        [
+          {
+            "node": "Filter Backlog Files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Backlog Files": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "GET File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET File": {
+      "main": [
+        [
+          {
+            "node": "Detect Stale Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Stale Items": {
+      "main": [
+        [
+          {
+            "node": "Any stale items?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Any stale items?": {
+      "main": [
+        [
+          {
+            "node": "GET LOCK.json",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "GET LOCK.json": {
+      "main": [
+        [
+          {
+            "node": "Check Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Lock": {
+      "main": [
+        [
+          {
+            "node": "Lock held by stale?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lock held by stale?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Lock Release",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Lock Release": {
+      "main": [
+        [
+          {
+            "node": "PUT LOCK.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT LOCK.json": {
+      "main": [
+        [
+          {
+            "node": "Telegram Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Report": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "watchdog"
+  ]
+}

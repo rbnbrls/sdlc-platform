@@ -1260,17 +1260,7 @@ Voeg toe aan `sdlc-trigger.yml` om te voorkomen dat agent-commits de pipeline op
           curl ...
 ```
 
-Configureer in Gitea dat API-commits (vanuit n8n) de `sdlc-agent` gebruiker gebruiken,
-of geef in de commit message een skip-tag mee: voeg `[sdlc-skip]` toe aan agent commit messages
-en filter daarop:
+Configureer in Gitea dat API-commits (vanuit n8n) de `sdlc-bot` committer gebruiken.
+Je kunt hierop filteren in de rules. Dit is robuuster dan filteren op commit messages.
 
-```yaml
-if [[ "${{ github.event.head_commit.message }}" == *"[sdlc-skip]"* ]]; then
-  echo "skip=true" >> $GITHUB_OUTPUT
-fi
-```
-
-En pas de commit message in alle n8n workflows aan:
-```
-"chore(sdlc): update {id} status → {status} [sdlc-skip]"
-```
+En in de n8n workflows geef je de committer mee in de payload.

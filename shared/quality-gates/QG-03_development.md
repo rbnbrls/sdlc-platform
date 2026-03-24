@@ -25,4 +25,4 @@
 ## Bij falen
 - Retry Developer Agent met gefaalde criteria als extra context
 - Maximum retry_count: 3
-- Bij retry_count ≥ 3: zet status op `needs-human`, stuur notificatie
+- Bij retry_count ≥ 3: zet status op `needs-human` (en bewaar de huidige status in `previous_status`), stuur notificatie

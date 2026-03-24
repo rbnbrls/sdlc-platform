@@ -1,0 +1,342 @@
+{
+  "name": "SDLC Restart Item",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sdlc-restart",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "get_file",
+      "name": "GET File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        400,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.query.file_path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "update_frontmatter",
+      "name": "Update Frontmatter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const file = $input.first().json;\nlet content = Buffer.from(file.content, 'base64').toString('utf8');\n\n// Very simple replace\nconst isoNow = new Date().toISOString();\ncontent = content.replace(/processing_updated:\\s*\"[^\"]*\"/, `processing_updated: \"${isoNow}\"`);\nif (content.match(/last_error:/)) {\n  content = content.replace(/last_error:\\s*\"[^\"]*\"/, `last_error: \"manually restarted\"`);\n} else {\n  content = content.replace(/processing_updated:\\s*\"[^\"]*\"\\n/, `processing_updated: \"${isoNow}\"\\nlast_error: \"manually restarted\"\\n`);\n}\n\nreturn [{\n  json: {\n    file_path: file.url.split('/contents/')[1],\n    sha: file.sha,\n    content: Buffer.from(content).toString('base64'),\n    item_id: $json.query.item_id\n  }\n}];"
+      }
+    },
+    {
+      "id": "put_file",
+      "name": "PUT File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        800,
+        300
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.file_path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore: manually restart {{ $json.item_id }}\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "release_lock",
+      "name": "Release Lock",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        300
+      ],
+      "parameters": {
+        "workflowId": "SDLC Lock Manager",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "action": "release",
+            "item_id": "={{ $json.item_id }}",
+            "pipeline_step": "watchdog-restart"
+          }
+        }
+      }
+    },
+    {
+      "id": "get_queue",
+      "name": "GET QUEUE.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "update_queue_data",
+      "name": "Update Queue Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const file = $input.first().json;\nconst queue = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\nconst itemId = $('Update Frontmatter').first().json.item_id;\nconst filePath = $('Update Frontmatter').first().json.file_path;\n\n// Read commit sha from the main branch\nconst inputItem = {\n  item_id: itemId,\n  file_path: filePath,\n  status: \"restarted\",\n  commit_sha: \"manually-restarted\",\n  queued_at: new Date().toISOString()\n};\n\nif (!queue.queue) queue.queue = [];\n\n// Add if not exists\nif (!queue.queue.some(i => i.item_id === itemId)) {\n  queue.queue.push(inputItem);\n}\nqueue.last_updated = new Date().toISOString();\n\nreturn [{\n  json: {\n    content: Buffer.from(JSON.stringify(queue, null, 2)).toString('base64'),\n    sha: file.sha,\n    item_id: itemId\n  }\n}];"
+      }
+    },
+    {
+      "id": "put_queue",
+      "name": "PUT QUEUE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1600,
+        300
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore(queue): manually enqueue {{ $json.item_id }}\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
+        "options": {},
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "telegram",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1800,
+        300
+      ],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=\ud83d\udd04 {{ $json.item_id }} handmatig herstart en in queue geplaatst",
+        "parseMode": "Markdown"
+      }
+    },
+    {
+      "id": "webhook_response",
+      "name": "Webhook Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2000,
+        300
+      ],
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.item_id }} restarted successfully and placed in queue."
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "GET File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET File": {
+      "main": [
+        [
+          {
+            "node": "Update Frontmatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Frontmatter": {
+      "main": [
+        [
+          {
+            "node": "PUT File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT File": {
+      "main": [
+        [
+          {
+            "node": "Release Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Release Lock": {
+      "main": [
+        [
+          {
+            "node": "GET QUEUE.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET QUEUE.json": {
+      "main": [
+        [
+          {
+            "node": "Update Queue Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Queue Data": {
+      "main": [
+        [
+          {
+            "node": "PUT QUEUE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT QUEUE": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "watchdog",
+    "restart"
+  ]
+}

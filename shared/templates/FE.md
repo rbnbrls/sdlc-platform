@@ -4,6 +4,7 @@ type: feature
 project: PROJECTNAAM
 title: ""
 status: new
+previous_status: ""
 priority: medium        # low | medium | high | critical
 epic: EP-XXX            # verplicht: parent epic
 created: YYYY-MM-DD
@@ -21,8 +22,12 @@ deployed_at: ""         # productie-deployment timestamp
 documented_at: ""
 retry_count: 0
 plan: ""                # pad naar plan bestand of inline JSON
+# Pipeline tracking (ingevuld door n8n, niet door mens)
 processing_started: ""
 processing_updated: ""
+current_agent: ""
+last_error: ""
+api_cost_usd: 0.0000
 triage_notes: ""
 ---
 
@@ -50,3 +55,6 @@ triage_notes: ""
 - [ ] Dependency vulnerability scan: geen critical/high
 - [ ] Deployed naar staging — staging health check OK
 - [ ] Deployed naar productie — productie health check OK
+
+## Review Feedback
+<!-- Ingevuld door Reviewer Agent. De Developer Agent verwijdert afgevinkte items. -->

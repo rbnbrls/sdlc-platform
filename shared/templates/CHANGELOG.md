@@ -1,20 +1,23 @@
 # Changelog — {Projectnaam}
 
 > Alle noemenswaardige wijzigingen in dit project worden hier gedocumenteerd.
-> Formaat gebaseerd op [Keep a Changelog](https://keepachangelog.com/nl/1.0.0/).
-> Versienummering volgt [Semantic Versioning](https://semver.org/lang/nl/).
+> Versienummering is op basis van datum en volgnummer: YYYY.MM.DD-N.
 >
 > Dit bestand wordt automatisch bijgewerkt door de Documenter Agent.
 
 ---
 
-## [Unreleased]
+<!-- Nieuwe entries worden hier door de Documenter Agent ingevoegd -->
 
-### Added
-### Fixed
-### Changed
-### Removed
+## [2026.03.24-1] — 2026-03-24
+
+### Features
+- FE-001: Voorbeeld feature
+
+### Bug fixes  
+- BUG-001: Voorbeeld bugfix
+
+### Technische wijzigingen
+- Voorbeeld technische wijziging
 
 ---
-
-<!-- Nieuwe entries worden hier door de Documenter Agent ingevoegd -->

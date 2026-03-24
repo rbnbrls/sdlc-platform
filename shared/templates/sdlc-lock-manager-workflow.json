@@ -1,0 +1,501 @@
+{
+  "name": "SDLC Lock Manager",
+  "nodes": [
+    {
+      "id": "trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "get_lock",
+      "name": "GET LOCK.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        450,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=token {{ $env.GITEA_BOT_TOKEN }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "parse_lock",
+      "name": "Parse LOCK.json",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        650,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const file = $input.first().json;\nconst content = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\nconst sha = file.sha;\n\nconst trigger = $('Execute Workflow Trigger').first().json;\n\nreturn [{\n  json: {\n    lock: content,\n    sha: sha,\n    action: trigger.action,\n    item_id: trigger.item_id,\n    pipeline_step: trigger.pipeline_step,\n    execution_id: trigger.execution_id\n  }\n}];"
+      }
+    },
+    {
+      "id": "switch_action",
+      "name": "Switch on Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.action }}",
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value2": "acquire",
+              "output": 0
+            },
+            {
+              "operation": "equal",
+              "value2": "release",
+              "output": 1
+            },
+            {
+              "operation": "equal",
+              "value2": "status",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "id": "check_free",
+      "name": "Is Lock Free?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1050,
+        150
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.lock.locked }}",
+              "value2": false
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "build_acquire",
+      "name": "Build Acquire Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1250,
+        50
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst newLock = {\n  locked: true,\n  locked_by: input.item_id,\n  locked_at: new Date().toISOString(),\n  pipeline_step: input.pipeline_step,\n  execution_id: input.execution_id\n};\n\nreturn [{\n  json: {\n    content: Buffer.from(JSON.stringify(newLock, null, 2)).toString('base64'),\n    sha: input.sha,\n    message: `chore(lock): acquire for ${input.item_id}`,\n    acquired: true,\n    item_id: input.item_id\n  }\n}];"
+      }
+    },
+    {
+      "id": "put_acquire",
+      "name": "PUT LOCK.json (Acquire)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1450,
+        50
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=token {{ $env.GITEA_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            },
+            {
+              "name": "sha",
+              "value": "={{ $json.sha }}"
+            },
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "return_acquired",
+      "name": "Return: Acquired",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1650,
+        50
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "acquired",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "return_not_acquired",
+      "name": "Return: Not Acquired",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1250,
+        250
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "acquired",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "name": "locked_by",
+              "value": "={{ $json.lock.locked_by }}",
+              "type": "string"
+            },
+            {
+              "name": "locked_at",
+              "value": "={{ $json.lock.locked_at }}",
+              "type": "string"
+            },
+            {
+              "name": "pipeline_step",
+              "value": "={{ $json.lock.pipeline_step }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "build_release",
+      "name": "Build Release Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1050,
+        400
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst newLock = {\n  locked: false,\n  locked_by: '',\n  locked_at: '',\n  pipeline_step: '',\n  execution_id: ''\n};\n\nreturn [{\n  json: {\n    content: Buffer.from(JSON.stringify(newLock, null, 2)).toString('base64'),\n    sha: input.sha,\n    message: `chore(lock): release after ${input.lock.locked_by}`\n  }\n}];"
+      }
+    },
+    {
+      "id": "put_release",
+      "name": "PUT LOCK.json (Release)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1250,
+        400
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=token {{ $env.GITEA_BOT_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "message",
+              "value": "={{ $json.message }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $json.content }}"
+            },
+            {
+              "name": "sha",
+              "value": "={{ $json.sha }}"
+            },
+            {
+              "name": "author.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "author.email",
+              "value": "sdlc-bot@7rb.nl"
+            },
+            {
+              "name": "committer.name",
+              "value": "sdlc-bot"
+            },
+            {
+              "name": "committer.email",
+              "value": "sdlc-bot@7rb.nl"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "return_released",
+      "name": "Return: Released",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1450,
+        400
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "released",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "return_status",
+      "name": "Return: Lock Status",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1050,
+        550
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "locked",
+              "value": "={{ $json.lock.locked }}",
+              "type": "boolean"
+            },
+            {
+              "name": "locked_by",
+              "value": "={{ $json.lock.locked_by }}",
+              "type": "string"
+            },
+            {
+              "name": "locked_at",
+              "value": "={{ $json.lock.locked_at }}",
+              "type": "string"
+            },
+            {
+              "name": "pipeline_step",
+              "value": "={{ $json.lock.pipeline_step }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "GET LOCK.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET LOCK.json": {
+      "main": [
+        [
+          {
+            "node": "Parse LOCK.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse LOCK.json": {
+      "main": [
+        [
+          {
+            "node": "Switch on Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch on Action": {
+      "main": [
+        [
+          {
+            "node": "Is Lock Free?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Release Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return: Lock Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Lock Free?": {
+      "main": [
+        [
+          {
+            "node": "Build Acquire Payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return: Not Acquired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Acquire Payload": {
+      "main": [
+        [
+          {
+            "node": "PUT LOCK.json (Acquire)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT LOCK.json (Acquire)": {
+      "main": [
+        [
+          {
+            "node": "Return: Acquired",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Release Payload": {
+      "main": [
+        [
+          {
+            "node": "PUT LOCK.json (Release)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT LOCK.json (Release)": {
+      "main": [
+        [
+          {
+            "node": "Return: Released",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "sdlc",
+    "infrastructure"
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-03-24T20:00:00Z",
+  "createdAt": "2026-03-24T20:00:00Z"
+}
