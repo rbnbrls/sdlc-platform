@@ -6,7 +6,10 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.2,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "parameters": {
         "httpMethod": "POST",
         "path": "sdlc-router",
@@ -18,7 +21,10 @@
       "name": "Verify HMAC",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [450, 300],
+      "position": [
+        450,
+        300
+      ],
       "parameters": {
         "jsCode": "const crypto = require('crypto');\nconst sig = $input.first().headers['x-hub-signature-256'];\nconst expected = 'sha256=' + crypto.createHmac('sha256', $env.N8N_SECRET)\n  .update(JSON.stringify($input.first().body)).digest('hex');\nif (sig !== expected) throw new Error('Invalid HMAC signature');\nreturn $input.all();"
       }
@@ -28,7 +34,10 @@
       "name": "Parse Frontmatter",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 300],
+      "position": [
+        650,
+        300
+      ],
       "parameters": {
         "jsCode": "// Split pipe-separated files and fetch each via Gitea API\n// Parse YAML frontmatter from each file\n// Return items with parsed status, type, project, id\nconst items = $input.first().json;\nconst files = items.files.split('|');\nconst results = [];\nfor (const file of files) {\n  results.push({ json: { filePath: file.trim(), status: 'new' } });\n}\nreturn results;"
       }
@@ -38,7 +47,10 @@
       "name": "Route by Status",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
-      "position": [900, 300],
+      "position": [
+        1400,
+        300
+      ],
       "parameters": {
         "dataType": "string",
         "value1": "={{ $json.status }}",
@@ -109,7 +121,10 @@
       "name": "SDLC Triage Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, -100],
+      "position": [
+        1700,
+        -100
+      ],
       "parameters": {}
     },
     {
@@ -117,7 +132,10 @@
       "name": "SDLC Planner Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 0],
+      "position": [
+        1700,
+        0
+      ],
       "parameters": {}
     },
     {
@@ -125,7 +143,10 @@
       "name": "SDLC Developer Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 100],
+      "position": [
+        1700,
+        100
+      ],
       "parameters": {}
     },
     {
@@ -133,7 +154,10 @@
       "name": "SDLC Secret Scanner",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 200],
+      "position": [
+        1700,
+        200
+      ],
       "parameters": {}
     },
     {
@@ -141,7 +165,10 @@
       "name": "SDLC Tester Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 300],
+      "position": [
+        1700,
+        300
+      ],
       "parameters": {}
     },
     {
@@ -149,7 +176,10 @@
       "name": "SDLC DevOps Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 400],
+      "position": [
+        1700,
+        400
+      ],
       "parameters": {}
     },
     {
@@ -157,7 +187,10 @@
       "name": "SDLC Documenter Agent",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 500],
+      "position": [
+        1700,
+        500
+      ],
       "parameters": {}
     },
     {
@@ -165,7 +198,10 @@
       "name": "SDLC Context Updater",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1,
-      "position": [1200, 600],
+      "position": [
+        1700,
+        600
+      ],
       "parameters": {}
     },
     {
@@ -173,10 +209,13 @@
       "name": "Telegram: Needs Human",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1200, 700],
+      "position": [
+        1700,
+        700
+      ],
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=⚠️ Menselijke input vereist: {{ $json.id }} — {{ $json.title }}"
+        "text": "=\u26a0\ufe0f Menselijke input vereist: {{ $json.id }} \u2014 {{ $json.title }}"
       }
     },
     {
@@ -184,10 +223,13 @@
       "name": "Telegram: Deploy Failed",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
-      "position": [1200, 800],
+      "position": [
+        1700,
+        800
+      ],
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=💥 Deploy gefaald: {{ $json.id }} — menselijke actie vereist"
+        "text": "=\ud83d\udca5 Deploy gefaald: {{ $json.id }} \u2014 menselijke actie vereist"
       }
     },
     {
@@ -195,39 +237,392 @@
       "name": "Unknown Status",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
-      "position": [1200, 900],
+      "position": [
+        1700,
+        900
+      ],
       "parameters": {}
+    },
+    {
+      "id": "dedup_check",
+      "name": "Deduplication Check",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst processingStarted = item.processing_started;\nif (processingStarted) {\n  const startedAt = new Date(processingStarted);\n  const now = new Date();\n  const minutesSinceStart = (now - startedAt) / 1000 / 60;\n  if (minutesSinceStart < 5) {\n    return [{ json: { skip: true, reason: 'already_processing', item_id: item.id } }];\n  }\n}\nreturn [{ json: { ...item, skip: false } }];"
+      }
+    },
+    {
+      "id": "is_duplicate",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        850,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.skip }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "acquire_lock",
+      "name": "Acquire Lock",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        400
+      ],
+      "parameters": {
+        "workflowId": "SDLC Lock Manager",
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "action": "acquire",
+            "item_id": "={{ $json.id }}",
+            "pipeline_step": "={{ $json.status }}"
+          }
+        }
+      }
+    },
+    {
+      "id": "is_acquired",
+      "name": "Is Acquired?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1150,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.acquired }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get_queue",
+      "name": "GET QUEUE.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1150,
+        600
+      ],
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "parse_append",
+      "name": "Parse + append item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        600
+      ],
+      "parameters": {
+        "jsCode": "const file = $input.first().json;\nconst queue = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\nconst item = $('Parse Frontmatter').first().json;\n\nconst alreadyQueued = queue.queue.find(q => q.item_id === item.id);\nif (alreadyQueued) {\n  return [{ json: { enqueued: false, reason: 'already_in_queue', item_id: item.id, locked_by: $('Acquire Lock').first().json.locked_by || 'unknown' } }];\n}\n\nqueue.queue.push({\n  item_id: item.id,\n  file_path: item.filePath,\n  status: item.status,\n  project: item.project,\n  priority: item.priority || 'medium',\n  queued_at: new Date().toISOString(),\n  commit_sha: $('Webhook').first().json?.body?.after || ''\n});\n\nconst PRIORITY_WEIGHT = { critical: 4, high: 3, medium: 2, low: 1 };\nqueue.queue.sort((a, b) => {\n  const weightA = PRIORITY_WEIGHT[a.priority] || 2;\n  const weightB = PRIORITY_WEIGHT[b.priority] || 2;\n  if (weightB !== weightA) return weightB - weightA;\n  return new Date(a.queued_at) - new Date(b.queued_at);\n});\n\nqueue.last_updated = new Date().toISOString();\n\nreturn [{\n  json: {\n    content: Buffer.from(JSON.stringify(queue, null, 2)).toString('base64'),\n    sha: file.sha,\n    item_id: item.id,\n    locked_by: $('Acquire Lock').first().json.locked_by || 'unknown',\n    enqueued: true\n  }\n}];"
+      }
+    },
+    {
+      "id": "if_enqueued",
+      "name": "Is Enqueued?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1450,
+        600
+      ],
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.enqueued }}",
+              "value2": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "put_queue",
+      "name": "PUT QUEUE.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1600,
+        500
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/QUEUE.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore(queue): enqueue {{ $json.item_id }} [sdlc-skip]\", \"content\": \"{{ $json.content }}\", \"sha\": \"{{ $json.sha }}\" }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "telegram_queue_placed",
+      "name": "Telegram: Queue Placed",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1800,
+        500
+      ],
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=\u23f3 {{ $('Parse + append item').first().json.item_id }} in wachtrij geplaatst (pipeline bezet door {{ $('Parse + append item').first().json.locked_by }})"
+      }
     }
   ],
   "connections": {
     "Webhook": {
       "main": [
-        [{ "node": "Verify HMAC", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Verify HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Verify HMAC": {
       "main": [
-        [{ "node": "Parse Frontmatter", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Parse Frontmatter",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Parse Frontmatter": {
       "main": [
-        [{ "node": "Route by Status", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Deduplication Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Route by Status": {
       "main": [
-        [{ "node": "SDLC Triage Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Planner Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Developer Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Secret Scanner", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Tester Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC DevOps Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Documenter Agent", "type": "main", "index": 0 }],
-        [{ "node": "SDLC Context Updater", "type": "main", "index": 0 }],
-        [{ "node": "Telegram: Needs Human", "type": "main", "index": 0 }],
-        [{ "node": "Telegram: Deploy Failed", "type": "main", "index": 0 }],
-        [{ "node": "Unknown Status", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "SDLC Triage Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Planner Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Developer Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Secret Scanner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Tester Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC DevOps Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Documenter Agent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SDLC Context Updater",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Needs Human",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram: Deploy Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unknown Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplication Check": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Acquire Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acquire Lock": {
+      "main": [
+        [
+          {
+            "node": "Is Acquired?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Acquired?": {
+      "main": [
+        [
+          {
+            "node": "Route by Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GET QUEUE.json",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET QUEUE.json": {
+      "main": [
+        [
+          {
+            "node": "Parse + append item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse + append item": {
+      "main": [
+        [
+          {
+            "node": "Is Enqueued?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Enqueued?": {
+      "main": [
+        [
+          {
+            "node": "PUT QUEUE.json",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "PUT QUEUE.json": {
+      "main": [
+        [
+          {
+            "node": "Telegram: Queue Placed",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -235,7 +630,9 @@
     "executionOrder": "v1"
   },
   "staticData": null,
-  "tags": ["sdlc"],
+  "tags": [
+    "sdlc"
+  ],
   "triggerCount": 0,
   "updatedAt": "2026-03-23T21:00:00Z",
   "createdAt": "2026-03-21T20:27:00Z"
