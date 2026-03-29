@@ -36,43 +36,104 @@ Importeer de bijbehorende JSON bestanden vanuit `workflows/n8n/`.
 
 ```
 Webhook (POST /sdlc-router)
-  → [Code] Verifieer HMAC-SHA256 handtekening
-      const crypto = require('crypto');
-      const sig = $request.headers['x-hub-signature-256'];
-      const expected = 'sha256=' + crypto.createHmac('sha256', $env.N8N_SECRET)
-        .update(JSON.stringify($request.body)).digest('hex');
-      if (sig !== expected) throw new Error('Invalid HMAC signature');
+  → [Code: Verify HMAC] Verifieer HMAC-SHA256 handtekening
+      Split pipe-separated file paths in losse items per bestand
 
-  → [Code] Idempotentie check
-      const staticData = $getWorkflowStaticData('global');
-      const key = `lock_${item.id}_${item.status}_${item.commit_sha}`;
-      if (staticData[key] && Date.now() - staticData[key] < 300000) return [];
-      staticData[key] = Date.now();
+  → [HTTP: Fetch File from Gitea] Per item:
+      GET /api/v1/repos/{{ GITEA_ORG }}/sdlc-platform/contents/{filePath}
+      Authorization: token {{ GITEA_BOT_TOKEN }}
 
-  → [Code] Splits pipe-separated files in losse items
+  → [Code: Parse Frontmatter]
+      Decodeer base64 → extract YAML frontmatter → parse velden
+      Fout (404, geen frontmatter): skip_parse=true
 
-  → [HTTP] Haal bestandsinhoud op via Gitea API per item
-      GET /api/v1/repos/sdlc-platform/sdlc-platform/contents/{filePath}
+  → [IF: If Parse Skip]
+      skip_parse = true → Telegram parse-fout melding → stop
+      skip_parse = false → ga door
 
-  → [Code] Parse YAML frontmatter + valideer schema
+  → [Code: Deduplication Check]
+      Als processing_started < 5 min geleden → skip=true (al in verwerking)
 
-  → [Switch op status]
-      new              → Execute: SDLC Triage Agent
-      triaged          → Execute: SDLC Planner Agent
-      planned          → Execute: SDLC Developer Agent (parallel per story)
-      in-progress      → Execute: SDLC Developer Agent
-      review           → Execute: SDLC Secret Scanner
-                            → (bij pass) Execute: SDLC Reviewer Agent
-      testing          → Execute: SDLC Tester Agent
-      staging-verified → Execute: SDLC DevOps Agent
-      done             → Execute: SDLC Documenter Agent
-      documented       → Execute: SDLC Context Updater
-      deploy-failed    → Telegram: "💥 Deploy gefaald: {id} — menselijke actie vereist"
-      needs-human      → Telegram: "⚠️ Menselijke input vereist: {id} — {reden}"
-                          (geen verdere automatische actie)
+  → [IF: Is Duplicate?]
+      skip = true → stop (geen verdere actie)
+      skip = false → ga door
+
+  → [Execute: Acquire Lock] → SDLC Lock Manager
+      action: "acquire", item_id: {id}, pipeline_step: {status}
+
+  → [Code: Merge Lock Result]
+      Combineer lock-resultaat met item-data
+
+  → [IF: Is Acquired?]
+      acquired = true:
+          → [HTTP: Write Processing Started]
+              PUT frontmatter: processing_started=now, processing_updated=now, current_agent="router"
+          → [Switch: Route by Status]
+              new              → Execute: SDLC Triage Agent
+              triaged          → Execute: SDLC Planner Agent
+              planned / in-progress → Execute: SDLC Developer Agent
+              review           → Execute: SDLC Secret Scanner
+              testing          → Execute: SDLC Tester Agent
+              staging-verified → Execute: SDLC DevOps Agent
+              done             → Execute: SDLC Documenter Agent
+              documented       → Execute: SDLC Context Updater
+              needs-human      → Telegram: "⚠️ Menselijke input vereist: {id}"
+              deploy-failed    → Telegram: "💥 Deploy gefaald: {id}"
+      acquired = false (pipeline bezet):
+          → [HTTP: GET QUEUE.json]
+          → [Code: Parse + append item] (prioriteitsscoring)
+          → [IF: Is Enqueued?]
+              true  → [HTTP: PUT QUEUE.json] → Telegram: item in wachtrij
+              false → (al in queue, stilte)
 ```
 
 **Nieuwe status `staging-verified`** vervangt `deploy-ready` om de staging/productie splitsing uit te drukken.
+
+> ⚠️ **De Router zelf krijgt GEEN n8n concurrency-limiet** ("Single"). Alleen de sub-workflows krijgen dit. De Router is stateless en levert items af via het lock-mechanisme.
+
+---
+
+## Lock Integratie — Verplicht in elke agent-workflow (IMP-01)
+
+Elke sub-workflow (Triage, Planner, Developer, Reviewer, Tester, DevOps, Documenter, Context Updater) **moet** aan het eind de lock vrijgeven. Dit geldt ook bij alle **foutpaden** (needs-human, retry-exhausted, etc.).
+
+### Patroon: Lock Release na status-update
+
+```
+[Na de laatste Gitea API PUT (status-update)]:
+  → [Execute Workflow: SDLC Lock Manager]
+      { action: "release", item_id: {{ $json.id }}, pipeline_step: {{ $json.status }} }
+
+[Op elk foutpad (needs-human, Error node, etc.)]:
+  → [Execute Workflow: SDLC Lock Manager]
+      { action: "release", item_id: {{ $json.id }} }
+```
+
+### Patroon: processing_updated bijwerken
+
+Elke agent schrijft bij elke Gitea PUT (status-update) ook `processing_updated` bij:
+
+```javascript
+// Voeg toe aan frontmatter update payload
+processing_updated: new Date().toISOString(),
+current_agent: '<agent-naam>'  // bijv. 'triage', 'planner', 'developer'
+```
+
+### n8n Concurrency instelling
+
+Zet **Settings → Execution order → "Single"** op:
+- SDLC Triage Agent
+- SDLC Planner Agent
+- SDLC Developer Agent
+- SDLC Reviewer Agent
+- SDLC Tester Agent
+- SDLC DevOps Agent
+- SDLC Documenter Agent
+- SDLC Quality Gate Checker
+
+> Dit zorgt dat als een tweede executie binnenkomt terwijl de eerste nog loopt, n8n de tweede in de wachtrij plaatst.
+
+---
 
 ---
 
