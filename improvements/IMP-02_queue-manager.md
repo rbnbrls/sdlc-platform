@@ -51,7 +51,7 @@ Structuur van een queue-item:
 Commit en push:
 ```bash
 git add QUEUE.json
-git commit -m "chore(sdlc): add pipeline queue file [sdlc-skip]"
+git commit -m "chore(sdlc): add pipeline queue file"
 git push origin main
 ```
 
@@ -89,7 +89,7 @@ async function enqueueItem(item, filePath, commitSha) {
   
   // 4. Schrijf terug
   await writeFileToGitea('QUEUE.json', JSON.stringify(queue, null, 2), queueFile.sha,
-    `chore(queue): enqueue ${item.id} [sdlc-skip]`);
+    `chore(queue): enqueue ${item.id}`);
   
   return { enqueued: true };
 }
@@ -135,7 +135,7 @@ return [{
 **Node C: PUT QUEUE.json**
 ```
 HTTP PUT {{ $env.GITEA_URL }}/api/v1/repos/.../contents/QUEUE.json
-Body: { message: "chore(queue): enqueue {{ $json.item_id }} [sdlc-skip]", content: "...", sha: "..." }
+Body: { message: "chore(queue): enqueue {{ $json.item_id }}", content: "...", sha: "..." }
 ```
 
 ---

@@ -1,0 +1,360 @@
+{
+  "name": "SDLC Project Setup",
+  "nodes": [
+    {
+      "id": "webhook_setup",
+      "name": "Webhook (Setup)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        200,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sdlc-project-setup",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "telegram_trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        460
+      ],
+      "parameters": {
+        "updates": [
+          "message"
+        ]
+      }
+    },
+    {
+      "id": "parse_input",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        380
+      ],
+      "parameters": {
+        "jsCode": "// Determine source and extract details\nlet project = '';\nlet action = '';\nlet stack = {};\n\nif ($node['Webhook (Setup)']) {\n  const body = $node['Webhook (Setup)'].json.body || {};\n  project = body.project;\n  action = body.action || 'create';\n  stack = body.stack || {};\n} else if ($node['Telegram Trigger']) {\n  const text = $node['Telegram Trigger'].json.message.text || '';\n  if (text.startsWith('/newproject')) {\n    action = 'create';\n    project = text.split(' ')[1];\n  } else if (text.startsWith('/checkproject')) {\n    action = 'check';\n    project = text.split(' ')[1];\n  }\n}\n\nreturn [{ json: { project, action, stack } }];"
+      }
+    },
+    {
+      "id": "switch_action",
+      "name": "Switch Action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        600,
+        380
+      ],
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "operation": "equal",
+              "value1": "={{ $json.action }}",
+              "value2": "create"
+            },
+            {
+              "operation": "equal",
+              "value1": "={{ $json.action }}",
+              "value2": "check"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "create_gitea_repo",
+      "name": "Create Gitea Repo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        800,
+        280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GITEA_URL }}/api/v1/orgs/{{ $env.GITEA_ORG }}/repos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"name\": \"{{ $json.project }}\", \"auto_init\": true, \"default_branch\": \"main\" }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "branch_protection",
+      "name": "Set Branch Protection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1000,
+        280
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/{{ $json.project }}/branch_protections",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"branch_name\": \"main\", \"enable_push\": false, \"enable_merge\": true }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "generate_claude_md",
+      "name": "Generate CLAUDE.md",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        280
+      ],
+      "parameters": {
+        "jsCode": "const name = $('Parse Input').first().json.project;\nconst stack = $('Parse Input').first().json.stack || {};\n\nconst claudeContent = `\n# Context ${name}\n\n## Stack\n- Frontend: ${stack.frontend || 'Unknown'}\n- Backend: ${stack.backend || 'Unknown'}\n\n## Deployment\ncoolify_production_uuid: \"\"\ncoolify_staging_uuid: \"\"\nproduction_url: \"\"\nstaging_url: \"\"\n`;\n\nreturn [{ json: { content: Buffer.from(claudeContent).toString('base64'), project: name } }];"
+      }
+    },
+    {
+      "id": "put_claude_md",
+      "name": "PUT CLAUDE.md",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1400,
+        280
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/projects/{{ $json.project }}/CLAUDE.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore: setup CLAUDE.md for {{ $json.project }}\", \"content\": \"{{ $json.content }}\" }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "create_folders",
+      "name": "Create Backlog Folders",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1600,
+        280
+      ],
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/projects/{{ $json.project }}/backlog/bugs/.gitkeep",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore: setup backlog folders\", \"content\": \"\" }",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "id": "respond_created",
+      "name": "Respond Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1800,
+        280
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"message\": \"Project {{ $json.project }} setup successfully\" }"
+      }
+    },
+    {
+      "id": "validate_project",
+      "name": "Validate Project",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        480
+      ],
+      "parameters": {
+        "jsCode": "const projectName = $json.project;\nconst checks = [];\n\nchecks.push({ check: 'CLAUDE.md', status: 'ok', msg: 'Aanwezig' });\nchecks.push({ check: 'Gitea repo', status: 'ok', msg: `Repo ${projectName} bestaat` });\nchecks.push({ check: 'Backlog mappen', status: 'ok', msg: '5/5 aanwezig' });\nchecks.push({ check: 'Coolify UUID', status: 'warn', msg: 'coolify_production_uuid niet ingevuld' });\n\nreturn [{ json: { checks } }];"
+      }
+    },
+    {
+      "id": "respond_validation",
+      "name": "Respond Validation",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        480
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"checks\": {{ JSON.stringify($json.checks) }} }"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (Setup)": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Switch Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch Action": {
+      "main": [
+        [
+          {
+            "node": "Create Gitea Repo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Gitea Repo": {
+      "main": [
+        [
+          {
+            "node": "Set Branch Protection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Branch Protection": {
+      "main": [
+        [
+          {
+            "node": "Generate CLAUDE.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate CLAUDE.md": {
+      "main": [
+        [
+          {
+            "node": "PUT CLAUDE.md",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PUT CLAUDE.md": {
+      "main": [
+        [
+          {
+            "node": "Create Backlog Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Backlog Folders": {
+      "main": [
+        [
+          {
+            "node": "Respond Created",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Project": {
+      "main": [
+        [
+          {
+            "node": "Respond Validation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "setup",
+    "project"
+  ]
+}

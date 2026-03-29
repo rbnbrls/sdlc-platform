@@ -1,6 +1,6 @@
 # IMP-05 — Agent-overgang verbeteringen: Router t/m Documenter
 
-**Status:** open  
+**Status:** done  
 **Prioriteit:** 🟠 Hoog  
 **Geschatte tijd:** 3-4 uur  
 **Raakt aan:** Alle agent-workflows, templates

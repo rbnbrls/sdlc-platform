@@ -218,10 +218,10 @@ sdlc-platform/
 ## Checklist
 
 ### Fase A
-- [ ] IMP-04: sdlc-bot account aangemaakt in Gitea
-- [ ] IMP-04: `GITEA_BOT_TOKEN` toegevoegd aan n8n
-- [ ] IMP-04: Gitea Action bijgewerkt (committer-filter)
-- [ ] IMP-04: alle agent-workflows bijgewerkt (gebruik `GITEA_BOT_TOKEN`)
+- [x] IMP-04: sdlc-bot account aangemaakt in Gitea
+- [x] IMP-04: `GITEA_BOT_TOKEN` toegevoegd aan n8n
+- [x] IMP-04: Gitea Action bijgewerkt (committer-filter)
+- [x] IMP-04: alle agent-workflows bijgewerkt (gebruik `GITEA_BOT_TOKEN`)
 - [ ] IMP-01: `LOCK.json` aangemaakt en gepusht
 - [ ] IMP-01: `SDLC Lock Manager` workflow gebouwd in n8n
 - [ ] IMP-01: n8n concurrency instelling "Single" op alle sub-workflows

@@ -65,10 +65,10 @@ Maak het bestand `LOCK.json` aan in de root van de `sdlc-platform` repo:
 }
 ```
 
-Commit als:
+Commit en push:
 ```bash
 git add LOCK.json
-git commit -m "chore(sdlc): add pipeline lock file [sdlc-skip]"
+git commit -m "chore(sdlc): add pipeline lock file"
 git push origin main
 ```
 
@@ -113,7 +113,7 @@ HTTP Request
 Methode: GET
 URL: {{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json
 Headers:
-  Authorization: token {{ $env.GITEA_TOKEN }}
+  Authorization: token {{ $env.GITEA_BOT_TOKEN }}
 ```
 
 ### Node 2 — Parse lock-bestand
@@ -167,7 +167,7 @@ return [{
   json: {
     content: Buffer.from(JSON.stringify(newLock, null, 2)).toString('base64'),
     sha: input.sha,
-    message: `chore(lock): acquire for ${input.item_id} [sdlc-skip]`,
+    message: `chore(lock): acquire for ${input.item_id}`,
     acquired: true
   }
 }];
@@ -177,7 +177,7 @@ Gevolgd door een **HTTP Request** (PUT):
 ```
 PUT {{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/LOCK.json
 Headers:
-  Authorization: token {{ $env.GITEA_TOKEN }}
+  Authorization: token {{ $env.GITEA_BOT_TOKEN }}
   Content-Type: application/json
 Body:
 {
@@ -206,7 +206,7 @@ return [{
   json: {
     content: Buffer.from(JSON.stringify(newLock, null, 2)).toString('base64'),
     sha: input.sha,
-    message: `chore(lock): release after ${input.lock.locked_by} [sdlc-skip]`
+    message: `chore(lock): release after ${input.lock.locked_by}`
   }
 }];
 ```

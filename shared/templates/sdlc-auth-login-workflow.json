@@ -1,0 +1,49 @@
+{
+  "name": "SDLC Auth Login",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sdlc-auth-login",
+        "options": {},
+        "responseMode": "responseNode"
+      },
+      "id": "webhook-login",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst state = crypto.randomBytes(16).toString('hex');\n\nconst url = `${$env.GITEA_URL}/login/oauth/authorize?client_id=${$env.GITEA_OAUTH_CLIENT_ID}&redirect_uri=${$env.N8N_BASE_URL}/webhook/sdlc-auth-callback&response_type=code&state=${state}`;\n\nreturn [{ json: { redirectUrl: url } }];"
+      },
+      "id": "generate-state",
+      "name": "Generate State & Redirect URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectUrl": "={{ $json.redirectUrl }}"
+      },
+      "id": "respond-redirect",
+      "name": "Respond Redirect",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [400, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [ [ {"node": "Generate State & Redirect URL", "type": "main", "index": 0} ] ]
+    },
+    "Generate State & Redirect URL": {
+      "main": [ [ {"node": "Respond Redirect", "type": "main", "index": 0} ] ]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "tags": ["sdlc", "auth"]
+}

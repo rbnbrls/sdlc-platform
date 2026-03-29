@@ -1,6 +1,6 @@
 # IMP-08 — Dashboard: voortgangsmonitor voor de eigenaar
 
-**Status:** open  
+**Status:** done  
 **Prioriteit:** 🟠 Hoog  
 **Geschatte tijd:** 4-6 uur  
 **Afhankelijk van:** IMP-01, IMP-03, IMP-06  

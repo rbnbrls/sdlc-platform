@@ -18,14 +18,40 @@
           <span class="logo-text">SDLC Monitor</span>
         </div>
         <div class="header-meta">
+          <span id="auth-status"></span>
+          <span id="platform-health" class="health-badge" style="display:none;">⏳ Health...</span>
           <span id="lock-status" class="lock-badge lock-free">✅ Pipeline vrij</span>
           <span id="last-updated" class="meta-text">Laden...</span>
+          <button id="new-item-btn" class="btn-refresh" style="background:var(--accent-blue); color:white; border:none; margin-right:8px;" onclick="showNewItemModal()">➕ Nieuw item</button>
           <button id="refresh-btn" class="btn-refresh" onclick="loadData()">↻ Verversen</button>
         </div>
       </div>
     </header>
 
     <main class="main">
+      <!-- Filters bovenaan -->
+      <section class="filter-bar" id="filter-bar">
+        <div class="filter-group">
+          <label class="filter-label">Project</label>
+          <select id="project-filter" class="filter-select" onchange="applyFilters()">
+            <option value="all">Alle projecten</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">Status</label>
+          <select id="status-filter" class="filter-select" onchange="applyFilters()">
+            <option value="all">Alle statussen</option>
+            <option value="active">Actief in pipeline</option>
+            <option value="needs-human">Needs human</option>
+            <option value="deploy-failed">Deploy gefaald</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <input type="text" id="search-input" class="filter-input" 
+                 placeholder="Zoek op ID of titel..." oninput="applyFilters()">
+        </div>
+      </section>
+
       <!-- Statistieken bovenaan -->
       <section class="stats-grid" id="stats-grid">
         <div class="stat-card" id="stat-active">
@@ -70,20 +96,62 @@
 
       <!-- Per project overzicht -->
       <section class="projects-section">
-        <h2 class="section-title">📦 Per Project</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 class="section-title" style="margin-bottom: 0;">📦 Projecten beheren & Overzicht</h2>
+          <button class="btn-refresh" style="background:var(--accent-blue); color:white; border:none;" onclick="showNewProjectModal()">🆕 Nieuw Project</button>
+        </div>
         <div id="projects-grid" class="projects-grid"></div>
       </section>
+
+      <!-- Analytics sectie -->
+      <section class="analytics-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 class="section-title" style="margin-bottom: 0;">📈 Trends & Analytics</h2>
+          <div class="chart-controls" style="display: flex; gap: 8px;">
+            <select id="chart-range" class="filter-select" onchange="loadData()">
+              <option value="7">7 dagen</option>
+              <option value="30" selected>30 dagen</option>
+              <option value="90">90 dagen</option>
+            </select>
+            <button class="btn-refresh" style="background:var(--accent-green); color:white; border:none;" onclick="exportCSV()">📥 Export CSV</button>
+          </div>
+        </div>
+        <div class="chart-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 16px;">
+          <div class="chart-card" style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <h3 class="chart-title" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; margin-top: 0;">Items voltooid per dag</h3>
+            <canvas id="chart-throughput"></canvas>
+          </div>
+          <div class="chart-card" style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <h3 class="chart-title" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; margin-top: 0;">API kosten per dag ($)</h3>
+            <canvas id="chart-costs"></canvas>
+          </div>
+          <div class="chart-card" style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <h3 class="chart-title" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; margin-top: 0;">Gemiddelde doorlooptijd (uren)</h3>
+            <canvas id="chart-cycletime"></canvas>
+          </div>
+          <div class="chart-card" style="background: var(--bg-card); padding: 16px; border-radius: 8px; border: 1px solid var(--border);">
+            <h3 class="chart-title" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px; margin-top: 0;">Agent kosten-breakdown ($)</h3>
+            <div style="height: 250px; display: flex; justify-content: center;">
+              <canvas id="chart-agent-costs"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
+
+    <!-- Modal en Toast -->
+    <div id="item-modal" style="display: none;"></div>
+    <div id="toast-container" class="toast-container"></div>
   </div>
 
   <script>
     // Config — pas aan voor jouw omgeving
     const CONFIG = {
       apiUrl: 'https://n8n.7rb.nl/webhook/sdlc-dashboard',
-      dashboardSecret: 'VERVANG_MET_JOUW_SECRET', // zelfde als DASHBOARD_SECRET in n8n
       refreshInterval: 60000 // 60 seconden auto-refresh
     };
   </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,182 @@
+{
+  "name": "SDLC Analytics Snapshot",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "55 23 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/branches/main",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-branch",
+      "name": "Haal branch op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [200, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "giteaApiToken", "name": "Gitea API Token" }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/git/trees/{{ $json.commit.id }}?recursive=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-tree",
+      "name": "Haal tree op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [400, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "giteaApiToken", "name": "Gitea API Token" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $json.tree;\nreturn items.filter(i => i.path.match(/^projects\\/[^\\/]+\\/backlog\\/.*\\.md$/)).map(i => ({ json: i }));"
+      },
+      "id": "filter-files",
+      "name": "Filter backlog bestanden",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "batchSize": 10,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-content",
+      "name": "Haal content op",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1000, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "giteaApiToken", "name": "Gitea API Token" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const files = $input.all();\nconst items = [];\n\nfiles.forEach(f => {\n  const file = f.json;\n  if (!file.content) return;\n  \n  const content = Buffer.from(file.content, 'base64').toString('utf8');\n  const fmMatch = content.match(/^---\\n([\\s\\S]+?)\\n---/);\n  if (!fmMatch) return;\n  \n  const fm = {};\n  fmMatch[1].split('\\n').forEach(line => {\n    const colonIdx = line.indexOf(':');\n    if (colonIdx === -1) return;\n    const key = line.slice(0, colonIdx).trim();\n    const val = line.slice(colonIdx + 1).trim().replace(/^\"(.*)\"$/, '$1');\n    fm[key] = val;\n  });\n  \n  items.push({\n    id: fm.id,\n    type: fm.type,\n    project: fm.project,\n    title: fm.title,\n    status: fm.status,\n    priority: fm.priority,\n    created: fm.created,\n    processing_started: fm.processing_started || null,\n    processing_updated: fm.processing_updated || null,\n    current_agent: fm.current_agent || null,\n    retry_count: parseInt(fm.retry_count) || 0,\n    last_error: fm.last_error || null,\n    api_cost_usd: parseFloat(fm.api_cost_usd) || 0,\n    deployed_at: fm.deployed_at || null,\n    file_path: file.path || file.url?.split('/contents/')[1]\n  });\n});\n\nreturn [{ json: { items, generated_at: new Date().toISOString() } }];"
+      },
+      "id": "parse-frontmatters",
+      "name": "Parse Frontmatters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const itemsObj = $('Parse Frontmatters').all();\nconst items = itemsObj[0].json.items;\nconst now = new Date();\nconst dateStr = now.toISOString().split('T')[0];\n\nconst STALE_MS = 30 * 60 * 1000;\nconst TERMINAL = ['documented', 'needs-human', 'deploy-failed'];\n\nconst stats = {\n  date: dateStr,\n  total_items: items.length,\n  by_status: {},\n  by_project: {},\n  by_type: {},\n  completed_today: 0,\n  costs: {\n    total: 0,\n    today: 0,\n    by_agent: {},\n    by_project: {}\n  },\n  performance: {\n    avg_cycle_time_hours: 0,\n    avg_retry_count: 0,\n    agent_fail_rate: {},\n    items_needs_human: 0,\n    items_deploy_failed: 0\n  },\n  throughput: {\n    completed_this_week: 0,\n    completed_this_month: 0\n  }\n};\n\nlet cycleTimes = [];\nlet retryCounts = [];\nlet agentFails = {};\nlet agentCalls = {};\n\nconst weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);\nconst monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);\n\nitems.forEach(item => {\n  stats.by_status[item.status] = (stats.by_status[item.status] || 0) + 1;\n  stats.by_type[item.type] = (stats.by_type[item.type] || 0) + 1;\n  \n  if (!stats.by_project[item.project]) {\n    stats.by_project[item.project] = { total: 0, active: 0, completed: 0 };\n    stats.costs.by_project[item.project] = 0;\n  }\n  stats.by_project[item.project].total++;\n  \n  stats.costs.total += item.api_cost_usd || 0;\n  stats.costs.by_project[item.project] += item.api_cost_usd || 0;\n  \n  if (item.current_agent) {\n    stats.costs.by_agent[item.current_agent] = (stats.costs.by_agent[item.current_agent] || 0) + (item.api_cost_usd || 0);\n    agentCalls[item.current_agent] = (agentCalls[item.current_agent] || 0) + 1;\n  }\n\n  if (item.status === 'documented') {\n    stats.by_project[item.project].completed++;\n    if (item.processing_updated?.startsWith(dateStr)) {\n      stats.completed_today++;\n      stats.costs.today += item.api_cost_usd || 0;\n    }\n    const upd = new Date(item.processing_updated);\n    if (upd >= weekAgo) stats.throughput.completed_this_week++;\n    if (upd >= monthAgo) stats.throughput.completed_this_month++;\n    \n    if (item.processing_started && item.processing_updated) {\n      const cycleMs = new Date(item.processing_updated) - new Date(item.processing_started);\n      cycleTimes.push(cycleMs / 3600000);\n    }\n  } else if (!['new'].includes(item.status)) {\n    stats.by_project[item.project].active++;\n  }\n  \n  if (item.status === 'needs-human') {\n    stats.performance.items_needs_human++;\n    if (item.current_agent) {\n      agentFails[item.current_agent] = (agentFails[item.current_agent] || 0) + 1;\n    }\n  }\n  if (item.status === 'deploy-failed') stats.performance.items_deploy_failed++;\n  \n  if (item.retry_count > 0) retryCounts.push(item.retry_count);\n});\n\nif (cycleTimes.length > 0) {\n  stats.performance.avg_cycle_time_hours = Math.round(cycleTimes.reduce((a, b) => a + b, 0) / cycleTimes.length * 10) / 10;\n}\nif (retryCounts.length > 0) {\n  stats.performance.avg_retry_count = Math.round(retryCounts.reduce((a, b) => a + b, 0) / retryCounts.length * 10) / 10;\n}\n\nObject.keys(agentFails).forEach(agent => {\n  stats.performance.agent_fail_rate[agent] = agentCalls[agent] ? Math.round((agentFails[agent] / agentCalls[agent]) * 100) / 100 : 0;\n});\n\nstats.costs.total = Math.round(stats.costs.total * 10000) / 10000;\nstats.costs.today = Math.round(stats.costs.today * 10000) / 10000;\nObject.keys(stats.costs.by_project).forEach(p => stats.costs.by_project[p] = Math.round(stats.costs.by_project[p] * 10000) / 10000);\nObject.keys(stats.costs.by_agent).forEach(a => stats.costs.by_agent[a] = Math.round(stats.costs.by_agent[a] * 10000) / 10000);\n\nconst contentBase64 = Buffer.from(JSON.stringify(stats, null, 2)).toString('base64');\n\nreturn [{ json: { date: dateStr, contentBase64 } }];"
+      },
+      "id": "aggregate-stats",
+      "name": "Aggregeer statistieken",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/analytics/snapshots/{{ $json.date }}.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "allowUnauthorizedCerts": false
+        }
+      },
+      "id": "check-snapshot",
+      "name": "Check bestaande snapshot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1600, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "giteaApiToken", "name": "Gitea API Token" }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/analytics/snapshots/{{ $('Aggregeer statistieken').first().json.date }}.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"chore: opslaan analytics snapshot {{ $('Aggregeer statistieken').first().json.date }}\", \"content\": \"{{ $('Aggregeer statistieken').first().json.contentBase64 }}\"{{ $json.sha ? `, \"sha\": \"${$json.sha}\"` : '' }} }",
+        "options": {}
+      },
+      "id": "write-snapshot",
+      "name": "Schrijf snapshot naar Gitea",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1800, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "giteaApiToken", "name": "Gitea API Token" }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [ [ {"node": "Haal branch op", "type": "main", "index": 0} ] ]
+    },
+    "Haal branch op": {
+      "main": [ [ {"node": "Haal tree op", "type": "main", "index": 0} ] ]
+    },
+    "Haal tree op": {
+      "main": [ [ {"node": "Filter backlog bestanden", "type": "main", "index": 0} ] ]
+    },
+    "Filter backlog bestanden": {
+      "main": [ [ {"node": "Split In Batches", "type": "main", "index": 0} ] ]
+    },
+    "Split In Batches": {
+      "main": [ [ {"node": "Haal content op", "type": "main", "index": 0} ] ]
+    },
+    "Haal content op": {
+      "main": [ [ {"node": "Parse Frontmatters", "type": "main", "index": 0} ] ]
+    },
+    "Parse Frontmatters": {
+      "main": [ [ {"node": "Aggregeer statistieken", "type": "main", "index": 0} ] ]
+    },
+    "Aggregeer statistieken": {
+      "main": [ [ {"node": "Check bestaande snapshot", "type": "main", "index": 0} ] ]
+    },
+    "Check bestaande snapshot": {
+       "main": [ [ {"node": "Schrijf snapshot naar Gitea", "type": "main", "index": 0} ] ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": ["sdlc", "analytics"]
+}

@@ -8,6 +8,7 @@ on:
       - 'LOCK.json'
       - 'QUEUE.json'
       - 'dashboard/**'
+      - 'agent_logs/**'
 
 jobs:
   trigger-n8n:

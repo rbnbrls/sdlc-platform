@@ -1,6 +1,6 @@
 # IMP-04 — sdlc-bot: dedicated Gitea account voor agent-commits
 
-**Status:** open  
+**Status:** done  
 **Prioriteit:** 🟡 Normaal  
 **Geschatte tijd:** 30 minuten  
 **Raakt aan:** Gitea configuratie, n8n env variabelen, sdlc-trigger.yml

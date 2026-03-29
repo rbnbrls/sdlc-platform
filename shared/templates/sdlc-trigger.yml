@@ -4,6 +4,11 @@ on:
     branches: [main]
     paths:
       - 'projects/*/backlog/**/*.md'
+    paths-ignore:
+      - 'LOCK.json'
+      - 'QUEUE.json'
+      - 'dashboard/**'
+      - 'analytics/**'
 
 jobs:
   trigger-n8n:

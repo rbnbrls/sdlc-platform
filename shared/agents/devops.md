@@ -65,6 +65,40 @@ POST /api/v1/deployments/{previous_deployment_uuid}/restart
 
 Wacht op rollback health check. Update frontmatter: `status: deploy-failed`.
 
+### Rollback Verificatie (V-09)
+Na het herstarten van de vorige deployment: voer een health check uit.
+
+```javascript
+// Code node: Verwerk rollback health check resultaat
+const response = $input.first().json;
+const statusCode = response.$response?.statusCode;
+const rollbackHealthy = statusCode >= 200 && statusCode < 300;
+
+return [{
+  json: {
+    rollback_healthy: rollbackHealthy,
+    status_code: statusCode
+  }
+}];
+```
+
+Telegram node na rollback:
+```javascript
+const item = $('Get Item Frontmatter').first().json;
+const health = $('Rollback Health Check').first().json;
+
+const emoji = health.rollback_healthy ? '⚠️' : '🚨';
+const healthStatus = health.rollback_healthy
+  ? 'Vorige versie is gezond en actief.'
+  : `KRITIEK: vorige versie reageert ook niet (HTTP ${health.status_code})! Handmatige interventie vereist!`;
+
+return [{
+  json: {
+    text: `${emoji} Rollback uitgevoerd: ${item.id}\n\n${healthStatus}`
+  }
+}];
+```
+
 ### Stap 5: Secrets Rotatie (optioneel)
 Als CLAUDE.md `rotate_secrets_on_deploy: true` bevat:
 ```

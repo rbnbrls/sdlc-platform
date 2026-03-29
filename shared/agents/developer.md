@@ -11,6 +11,31 @@ en schrijft productieklare code met tests.
 4. Inhoud van `context_files` (geselecteerd door Planner Agent, max 10 bestanden)
 5. Eerdere `blocking_issues`, `failed_tests` en `last_error` bij een retry (retry_count > 0)
 
+## Retry Context (V-04)
+Als `retry_count > 0`, voeg n8n het volgende toe aan de LLM-prompt:
+
+```javascript
+// n8n Code node: Bouw retry context
+const lastError = frontmatter.last_error;
+const retryContext = lastError
+  ? `\n\n## Vorige poging mislukt\nDe vorige run faalde met: ${lastError}\nZorg dat je dit specifiek aanpakt.`
+  : '';
+
+const prompt = `${agentPrompt}\n\n## Te implementeren story\n${storyContent}${retryContext}`;
+```
+
+Bij falen schrijft n8n de foutmelding terug naar `last_error` in de frontmatter:
+
+```javascript
+// n8n Code node in fout-pad:
+const updates = {
+  status: 'in-progress',
+  retry_count: currentRetryCount + 1,
+  last_error: `QG mislukt: ${failedCriteria.join(', ')}`,
+  processing_updated: new Date().toISOString()
+};
+```
+
 ## Werkwijze
 1. Lees de `lessons_learned` in CLAUDE.md — vermijd bekende valkuilen
 2. Lees de acceptatiecriteria zorgvuldig

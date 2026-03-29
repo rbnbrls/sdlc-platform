@@ -1,0 +1,295 @@
+{
+  "name": "SDLC Create Item",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sdlc-create-item",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "https://dashboard.7rb.nl"
+              }
+            ]
+          }
+        },
+        "responseMode": "lastNode"
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [ 0, 0 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\ntry {\n  const cookieStr = $input.first().json.headers.cookie || '';\n  const token = cookieStr.split(';').find(c => c.trim().startsWith('sdlc_token='))?.split('=')[1];\n  if (!token) return [{ json: { authenticated: false, error: 'Unauthorized' } }];\n  \n  const parts = token.split('.');\n  if (parts.length !== 3) return [{ json: { authenticated: false, error: 'Invalid token' } }];\n  \n  const [header, payload, signature] = parts;\n  const expectedSig = crypto.createHmac('sha256', $env.JWT_SECRET).update(`${header}.${payload}`).digest('base64url');\n  if (signature !== expectedSig) return [{ json: { authenticated: false, error: 'Invalid signature' } }];\n  \n  const data = JSON.parse(Buffer.from(payload, 'base64url').toString());\n  if (data.exp < Date.now() / 1000) return [{ json: { authenticated: false, error: 'Token expired' } }];\n  \n  return [{ json: { authenticated: true, user: data.username, body: $input.first().json.body } }];\n} catch (err) {\n  return [{ json: { authenticated: false, error: err.message } }];\n}"
+      },
+      "id": "validate-auth",
+      "name": "Valideer Auth",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 200, 0 ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.authenticated }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-auth",
+      "name": "Check Auth",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 400, 0 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: false, error: $json.error } }];"
+      },
+      "id": "respond-error",
+      "name": "Respond Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 600, 200 ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/branches/main",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-branch",
+      "name": "Get Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 600, 0 ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/git/trees/{{ $json.commit.id }}?recursive=true",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-tree",
+      "name": "Get Tree",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 800, 0 ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/shared/templates/{{ $('Valideer Auth').first().json.body.type }}.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "id": "get-template",
+      "name": "Get Template",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 1000, 0 ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const tree = $('Get Tree').first().json.tree;\nconst payload = $('Valideer Auth').first().json.body;\nconst templateFile = $input.first().json.content;\n\nconst type = payload.type || 'ISS';\nconst project = payload.project;\n\nlet count = 0;\ntree.forEach(item => {\n    if (item.path.startsWith(`projects/${project}/backlog/`)) {\n        const fileMatch = item.path.match(/projects\\/[^\\/]+\\/backlog\\/[^\\/]+\\/([A-Z]+)-(\\d+)_/);\n        if (fileMatch && fileMatch[1] === type) {\n            const num = parseInt(fileMatch[2], 10);\n            if (num > count) count = num;\n        }\n    }\n});\n\nconst nextId = `${type}-${String(count + 1).padStart(3, '0')}`;\nconst rawTemplate = Buffer.from(templateFile, 'base64').toString('utf8');\nconst now = new Date().toISOString().split('T')[0];\n\nconst typeFolderMap = { 'BUG': 'bugs', 'ISS': 'issues', 'FE': 'features', 'US': 'stories', 'EP': 'epics' };\nconst folder = typeFolderMap[type] || 'issues';\n\nconst titleStr = payload.title || 'Untitled';\nconst slug = titleStr.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst filePath = `projects/${project}/backlog/${folder}/${nextId}_${slug}.md`;\n\nlet updatedMarkdown = rawTemplate;\nupdatedMarkdown = updatedMarkdown.replace(/^id:\\s*.*$/m, `id: ${nextId}`);\nupdatedMarkdown = updatedMarkdown.replace(/^type:\\s*.*$/m, `type: ${type.toLowerCase()}`);\nupdatedMarkdown = updatedMarkdown.replace(/^project:\\s*.*$/m, `project: ${project}`);\nupdatedMarkdown = updatedMarkdown.replace(/^title:\\s*.*$/m, `title: \"${titleStr.replace(/\"/g, '\\\\\"')}\"`);\nupdatedMarkdown = updatedMarkdown.replace(/^priority:\\s*.*$/m, `priority: ${payload.priority}`);\nupdatedMarkdown = updatedMarkdown.replace(/^created:\\s*.*$/m, `created: ${now}`);\nupdatedMarkdown = updatedMarkdown.replace(/^updated:\\s*.*$/m, `updated: ${now}`);\n\nif (type === 'BUG' && payload.severity) {\n    updatedMarkdown = updatedMarkdown.replace(/^severity:\\s*.*$/m, `severity: ${payload.severity}`);\n}\nif (['FE', 'US'].includes(type) && payload.parent_epic) {\n    updatedMarkdown = updatedMarkdown.replace(/^epic:\\s*.*$/m, `epic: ${payload.parent_epic}`);\n}\n\nconst parts = updatedMarkdown.split('---');\nif (parts.length >= 3) {\n    let frontmatter = parts[1];\n    let body = parts.slice(2).join('---');\n    const desc = payload.description || '';\n    if (body.includes('## Beschrijving')) {\n        body = body.replace('## Beschrijving', `## Beschrijving\\n\\n${desc}\\n`);\n    } else {\n        body = `\\n${desc}\\n` + body;\n    }\n    updatedMarkdown = `---${frontmatter}---${body}`;\n}\n\nconst contentBase64 = Buffer.from(updatedMarkdown).toString('base64');\n\nreturn [{\n    json: {\n        file_path: filePath,\n        content_base64: contentBase64,\n        item_id: nextId,\n        title: titleStr,\n        message: `chore: create ${nextId} van dashboard`\n    }\n}];"
+      },
+      "id": "format-file",
+      "name": "Format File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1200, 0 ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $env.GITEA_URL }}/api/v1/repos/{{ $env.GITEA_ORG }}/sdlc-platform/contents/{{ $json.file_path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"message\": \"{{ $json.message }}\", \"content\": \"{{ $json.content_base64 }}\" }",
+        "options": {}
+      },
+      "id": "write-to-gitea",
+      "name": "Write to Gitea",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 1400, 0 ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "giteaApiToken",
+          "name": "Gitea API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"chat_id\": \"{{ $env.TELEGRAM_CHAT_ID }}\", \"text\": \"➕ {{ $('Format File').first().json.item_id }} aangemaakt via dashboard: \\n{{ $('Format File').first().json.title }}\" }",
+        "options": {}
+      },
+      "id": "send-telegram",
+      "name": "Send Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [ 1600, 0 ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { success: true, item_id: $('Format File').first().json.item_id } }];"
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [ 1800, 0 ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valideer Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valideer Auth": {
+      "main": [
+        [
+          {
+            "node": "Check Auth",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Auth": {
+      "main": [
+        [
+          {
+            "node": "Get Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Branch": {
+      "main": [
+        [
+          {
+            "node": "Get Tree",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Tree": {
+      "main": [
+        [
+          {
+            "node": "Get Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Template": {
+      "main": [
+        [
+          {
+            "node": "Format File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format File": {
+      "main": [
+        [
+          {
+            "node": "Write to Gitea",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write to Gitea": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Telegram": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    "sdlc",
+    "dashboard",
+    "create-item"
+  ]
+}

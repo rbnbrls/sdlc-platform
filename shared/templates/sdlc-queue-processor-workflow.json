@@ -107,7 +107,7 @@
         400
       ],
       "parameters": {
-        "jsCode": "const file = $input.first().json;\nconst queue = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\n\nif (!queue.queue || queue.queue.length === 0) {\n  return [{ json: { empty: true } }];\n}\n\nconst item = queue.queue.shift();\nqueue.last_updated = new Date().toISOString();\n\nreturn [{\n  json: {\n    empty: false,\n    next_item: item,\n    remaining_queue: queue,\n    queue_sha: file.sha,\n    updated_queue_content: Buffer.from(JSON.stringify(queue, null, 2)).toString('base64')\n  }\n}];"
+        "jsCode": "const file = $input.first().json;\nconst queue = JSON.parse(Buffer.from(file.content, 'base64').toString('utf8'));\n\nif (!queue.queue || queue.queue.length === 0) {\n  return [{ json: { empty: true } }];\n}\n\n// Herbereken scores (status kan tussentijds veranderd zijn)\nfunction calculateQueueScore(item) {\n  const TYPE_WEIGHTS = {\n    'bug': { 'critical': 100, 'major': 90, 'minor': 70, 'trivial': 50, '_default': 70 },\n    'issue': { 'security': 95, 'performance': 65, '_default': 60 },\n    'feature': { '_default': 30 },\n    'story': { '_default': 20 },\n    'epic': { '_default': 10 }\n  };\n  let typeWeight = 30;\n  const typeConfig = TYPE_WEIGHTS[item.type];\n  if (typeConfig) {\n    if (item.type === 'bug') typeWeight = typeConfig[item.severity] || typeConfig['_default'];\n    else if (item.type === 'issue') typeWeight = typeConfig[item.category] || typeConfig['_default'];\n    else typeWeight = typeConfig['_default'];\n  }\n  const PRIORITY_WEIGHTS = { 'critical': 40, 'high': 30, 'medium': 20, 'low': 10 };\n  const priorityWeight = PRIORITY_WEIGHTS[item.priority] || 20;\n  if (item.status === 'deploy-failed') return typeWeight + priorityWeight + 50;\n  const STATUS_WEIGHTS = { 'staging-verified': 15, 'testing': 12, 'review': 10, 'in-progress': 8, 'planned': 5, 'triaged': 3, 'new': 0 };\n  const statusWeight = STATUS_WEIGHTS[item.status] || 0;\n  return typeWeight + priorityWeight + statusWeight;\n}\n\nqueue.queue.forEach(item => {\n  item.queue_score = calculateQueueScore(item);\n});\nqueue.queue.sort((a, b) => {\n  if (b.queue_score !== a.queue_score) return b.queue_score - a.queue_score;\n  return new Date(a.queued_at) - new Date(b.queued_at);\n});\n\nconst item = queue.queue.shift();\nqueue.last_updated = new Date().toISOString();\n\nreturn [{\n  json: {\n    empty: false,\n    next_item: item,\n    remaining_queue: queue,\n    queue_sha: file.sha,\n    updated_queue_content: Buffer.from(JSON.stringify(queue, null, 2)).toString('base64')\n  }\n}];"
       }
     },
     {
@@ -369,7 +369,7 @@
       ],
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=\u25b6\ufe0f Queue: {{ $json.popData.next_item.item_id }} opgepakt ({{ $json.popData.remaining_queue.queue.length }} items resterend)"
+        "text": "=\u25b6\ufe0f Queue: {{ $json.popData.next_item.item_id }} opgepakt\n\ud83d\udcca Score: {{ $json.popData.next_item.queue_score }} ({{ $json.popData.next_item.type }}/{{ $json.popData.next_item.priority }})\n\ud83d\udce6 {{ $json.popData.remaining_queue.queue.length }} items resterend"
       }
     }
   ],

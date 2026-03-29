@@ -1,0 +1,135 @@
+{
+  "name": "SDLC Auth Callback",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "sdlc-auth-callback",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-callback",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.2,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.GITEA_URL }}/login/oauth/access_token",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"client_id\": \"{{ $env.GITEA_OAUTH_CLIENT_ID }}\", \"client_secret\": \"{{ $env.GITEA_OAUTH_CLIENT_SECRET }}\", \"code\": \"{{ $input.first().json.query.code }}\", \"grant_type\": \"authorization_code\", \"redirect_uri\": \"{{ $env.N8N_BASE_URL }}/webhook/sdlc-auth-callback\" }",
+        "options": {}
+      },
+      "id": "exchange-code",
+      "name": "Exchange code",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [200, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.GITEA_URL }}/api/v1/user",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=token {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-user",
+      "name": "Get User Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [400, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\nconst username = $json.login;\nconst allowedUsers = ($env.DASHBOARD_ALLOWED_USERS || '').split(',').map(u => u.trim());\n\nif (!allowedUsers.includes(username)) {\n  return [{ json: { error: 'Unauthorized user', redirect: 'https://dashboard.7rb.nl/unauthorized' } }];\n}\n\n// Generate JWT\nconst header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');\nconst exp = Math.floor(Date.now() / 1000) + (24 * 60 * 60);\nconst role = username === 'admin' || allowedUsers[0] === username ? 'admin' : 'viewer';\nconst payload = Buffer.from(JSON.stringify({ username, role, exp })).toString('base64url');\n\nconst signature = crypto\n  .createHmac('sha256', $env.JWT_SECRET)\n  .update(`${header}.${payload}`)\n  .digest('base64url');\n\nconst token = `${header}.${payload}.${signature}`;\n\nreturn [{ json: { token, redirect: 'https://dashboard.7rb.nl' } }];"
+      },
+      "id": "generate-jwt",
+      "name": "Validate & Generate JWT",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.error }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "id": "check-error",
+      "name": "Check Error",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [800, 0]
+    },
+    {
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectUrl": "={{ $node['Validate & Generate JWT'].json.redirect }}"
+      },
+      "id": "respond-error-redirect",
+      "name": "Respond Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, -100]
+    },
+    {
+      "parameters": {
+        "respondWith": "redirect",
+        "redirectUrl": "={{ $json.redirect }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Set-Cookie",
+                "value": "=sdlc_token={{ $json.token }}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=86400"
+              }
+            ]
+          }
+        }
+      },
+      "id": "respond-success-redirect",
+      "name": "Respond Success Cookie",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1000, 100]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [ [ {"node": "Exchange code", "type": "main", "index": 0} ] ]
+    },
+    "Exchange code": {
+      "main": [ [ {"node": "Get User Info", "type": "main", "index": 0} ] ]
+    },
+    "Get User Info": {
+      "main": [ [ {"node": "Validate & Generate JWT", "type": "main", "index": 0} ] ]
+    },
+    "Validate & Generate JWT": {
+      "main": [ [ {"node": "Check Error", "type": "main", "index": 0} ] ]
+    },
+    "Check Error": {
+      "main": [
+        [ {"node": "Respond Unauthorized", "type": "main", "index": 0} ],
+        [ {"node": "Respond Success Cookie", "type": "main", "index": 0} ]
+      ]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "tags": ["sdlc", "auth"]
+}
