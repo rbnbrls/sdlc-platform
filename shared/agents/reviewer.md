@@ -64,7 +64,9 @@ Body: {
   "comments": [],
   "blocking_issues": [],
   "suggestions": [],
-  "patterns_observed": []
+  "patterns_observed": [],
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "tester"
 }
 ```
 
@@ -72,9 +74,12 @@ Als `approved: false`:
 - `status_update`: terug naar `"in-progress"`
 - `pr_review_event`: `"REQUEST_CHANGES"`
 - `blocking_issues`: lijst van kritieke problemen die opgelost moeten worden
+- `current_agent`: `"developer"` (terug naar developer bij afkeuring)
 
 **`patterns_observed`:** Herhaalde patronen die in meerdere reviews voorkomen
 (wordt doorgegeven aan SDLC Context Updater voor CLAUDE.md verrijking).
+
+> **Watchdog-integratie:** n8n schrijft `processing_updated` en `current_agent` automatisch terug naar de frontmatter van het werkitem na elke agent-stap. De waarde van `current_agent` geeft aan **welke agent als volgende** aan de beurt is.
 
 ## Regels
 - `approved: false` alleen bij: security issues, ontbrekende tests, niet-voldoen

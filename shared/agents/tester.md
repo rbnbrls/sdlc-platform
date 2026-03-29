@@ -61,9 +61,11 @@ Body: {
     "moderate": 2,
     "details": "2 moderate vulnerabilities in devDependencies, niet blokkerend"
   },
-  "staging_health": "ok"
+  "staging_health": "ok",
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "devops"
 }
 ```
 
-Als `passed: false`: `status_update` → `"in-progress"` (terug naar Developer Agent)
+Als `passed: false`: `status_update` → `"in-progress"` (terug naar Developer Agent), `current_agent` → `"developer"`  
 Als critical/high vulnerabilities: `status_update` → `"needs-human"`, en voeg `"previous_status": "<huidige_status>"` toe aan JSON.

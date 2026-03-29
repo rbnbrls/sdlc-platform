@@ -89,7 +89,9 @@ Body: { "state": "success", "context": "SDLC: QG-06 Deploy", "description": "Dep
   "staging_health": "ok",
   "production_health": "ok",
   "rollback_performed": false,
-  "environment": "production"
+  "environment": "production",
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "documenter"
 }
 ```
 
@@ -99,9 +101,13 @@ Bij falen:
   "status_update": "deploy-failed",
   "rollback_performed": true,
   "rollback_deployment_id": "",
-  "failure_reason": "Health check timeout na 3 minuten"
+  "failure_reason": "Health check timeout na 3 minuten",
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "devops"
 }
 ```
+
+> **Watchdog-integratie:** n8n schrijft `processing_updated` en `current_agent` automatisch terug naar de frontmatter van het werkitem na elke agent-stap. De waarde van `current_agent` geeft aan **welke agent als volgende** aan de beurt is.
 
 ## Regels
 - Nooit direct naar productie zonder staging health check OK

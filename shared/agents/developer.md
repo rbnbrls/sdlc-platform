@@ -39,7 +39,9 @@ voor algemene architectuur en conventies.
     "criterium 2": true
   },
   "notes": "",
-  "new_patterns": []
+  "new_patterns": [],
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "reviewer"
 }
 ```
 

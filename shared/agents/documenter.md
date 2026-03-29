@@ -63,9 +63,13 @@ bedoeld als context voor toekomstige AI agents.
   "changelog_entry": "## [2026-03-21] — 2026-03-21\n\n### Fixed\n- Login crash bij leeg wachtwoord (BUG-001)",
   "summary": "Beknopte samenvatting van wat er gedocumenteerd is (1-2 zinnen)",
   "project_md_sections_updated": ["Bekende issues", "Recente wijzigingen"],
-  "new_version": ""
+  "new_version": "",
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": ""
 }
 ```
+
+> **`current_agent`** is leeg bij `documented` omdat dit de eindstatus is (geen volgende agent).
 
 ## Schrijfstijl voor PROJECT.md
 - **Mensgericht:** Schrijf in begrijpelijk Nederlands, geen jargon tenzij noodzakelijk

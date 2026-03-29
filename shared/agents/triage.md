@@ -42,9 +42,13 @@ Je ontvangt:
   "features": ["FE-001", "FE-002"],
   "suggested_estimate": "M",
   "needs_human_input": false,
-  "needs_human_reason": ""
+  "needs_human_reason": "",
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "planner"
 }
 ```
+
+> **Watchdog-integratie:** n8n schrijft `processing_updated` en `current_agent` automatisch terug naar de frontmatter van het werkitem na elke agent-stap. De waarde van `current_agent` geeft aan **welke agent als volgende** aan de beurt is (zodat de Watchdog weet waar het item op wacht).
 
 ## Regels
 - Als cruciale informatie ontbreekt die de AI niet zelf kan invullen:

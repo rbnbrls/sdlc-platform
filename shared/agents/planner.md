@@ -33,7 +33,9 @@ draft Pull Request aan in de project-repo.
   ],
   "implementation_notes": "Technische aanpak...",
   "risks": ["risico 1"],
-  "context_files": ["src/relevantBestand.ts", "src/andereModule.ts"]
+  "context_files": ["src/relevantBestand.ts", "src/andereModule.ts"],
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "developer"
 }
 ```
 
@@ -48,9 +50,13 @@ draft Pull Request aan in de project-repo.
   "fix_approach": "Beschrijving van de fix",
   "files_likely_affected": ["pad/naar/bestand.ts"],
   "test_additions": ["wat er getest moet worden"],
-  "context_files": ["pad/naar/bestand.ts"]
+  "context_files": ["pad/naar/bestand.ts"],
+  "processing_updated": "<ISO timestamp van nu — automatisch door n8n>",
+  "current_agent": "developer"
 }
 ```
+
+> **Watchdog-integratie:** n8n schrijft `processing_updated` en `current_agent` automatisch terug naar de frontmatter van het werkitem na elke agent-stap. De waarde van `current_agent` geeft aan **welke agent als volgende** aan de beurt is.
 
 ## Regels
 - Branch naam: lowercase, kebab-case, begint met `feature/` of `fix/`

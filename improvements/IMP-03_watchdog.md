@@ -1,6 +1,6 @@
 # IMP-03 — Watchdog: stale item detectie & automatisch herstel
 
-**Status:** open  
+**Status:** ✅ done  
 **Prioriteit:** 🔴 Kritiek  
 **Geschatte tijd:** 1 uur  
 **Afhankelijk van:** IMP-01 (Lock Manager)  
@@ -39,11 +39,11 @@ api_cost_usd: 0.00       # cumulatieve API-kosten (opgeteld door elke agent)
 
 ### Welke templates aanpassen:
 
-- [ ] `shared/templates/BUG.md`
-- [ ] `shared/templates/ISS.md`
-- [ ] `shared/templates/EP.md`
-- [ ] `shared/templates/FE.md`
-- [ ] `shared/templates/US.md`
+- [x] `shared/templates/BUG.md`
+- [x] `shared/templates/ISS.md`
+- [x] `shared/templates/EP.md`
+- [x] `shared/templates/FE.md`
+- [x] `shared/templates/US.md`
 
 ### Integratie in agents
 
